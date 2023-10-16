@@ -6263,6 +6263,33 @@
       },
       "description": "Trap that immobilizes enemies for 5 seconds"
     },
+    "Landmine": {
+      "width": 32,
+      "height": 32,
+      "categories": {"trap":true,"spike_trap":true},
+      "isPassable": true,
+      "isFlamable": false,
+      "cost": {
+        "gold": 500
+      },
+      "requirements": {
+        "IronBar": 20,
+        "CircuitBoard": 2,
+        "Explosives": 5
+      },
+      "stats": {
+        "health": 200,
+        "pvpHealth": 50,
+        "damage": 40,
+        "count": 1,
+        "reload": 1000
+      },
+      "upgrade": {
+        "health": "+25",
+        "count": "+1"
+      },
+      "description": "Trap that will detonate when an enemy steps on it"
+    },
     "Bed": {
       "width": 64,
       "height": 32,
