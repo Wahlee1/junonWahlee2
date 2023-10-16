@@ -24,6 +24,7 @@ Buildings.RailStop = require("./rail_stop")
 
 Buildings.SpikeTrap = require("./spike_trap")
 Buildings.WebTrap = require("./web_trap")
+Buildings.Landmine = require("./landmine")
 
 Buildings.SealedDoor = require("./sealed_door")
 Buildings.Airlock = require("./airlock")
