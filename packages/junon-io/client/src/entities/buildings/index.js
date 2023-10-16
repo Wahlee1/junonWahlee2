@@ -31,6 +31,7 @@ Buildings.Production.AmmoPrinter = require("./ammo_printer")
 
 Buildings.Structures.SpikeTrap = require("./spike_trap")
 Buildings.Structures.WebTrap = require("./web_trap")
+Buildings.Structures.Landmine = require("./landmine")
 Buildings.Structures.ManualAirlock = require("./manual_airlock")
 Buildings.Structures.Airlock = require("./airlock")
 Buildings.Structures.SealedDoor = require("./sealed_door")
