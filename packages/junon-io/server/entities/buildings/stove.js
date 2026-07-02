@@ -105,7 +105,8 @@ class Stove extends BaseBuilding {
   onFoodReady() {
     try {
       let item = this.getDesiredFoodItem()
-      
+      if(!item.isFoodCooked) return
+          
       this.activeUser.setIsWorking(false)
 
       let isSuccessful
@@ -169,4 +170,3 @@ class Stove extends BaseBuilding {
 }
 
 module.exports = Stove
-
