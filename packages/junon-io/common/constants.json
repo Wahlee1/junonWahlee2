@@ -2958,7 +2958,6 @@
     "Potato": {
       "width": 24,
       "height": 24,
-      "isCooked": true,
       "isIngredient": true,
       "cost": {
         "gold": 150
