@@ -71,7 +71,7 @@ class Interact extends BaseCommand {
           }
         }
 
-        if (entity.hasCategory("door")) {
+        if (entity.hasCategory("door") || entity.hasCategory("lamp")) {
           if (operation === "open") {
             entity.open()
           } else if (operation === "close") {
