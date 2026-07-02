@@ -2731,6 +2731,7 @@
     "Gelatin": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "cost": {
         "gold": 15
       },
@@ -2799,6 +2800,7 @@
     "AnimalMeat": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "isIngredient": true,
       "cost": {
         "gold": 15
@@ -2819,6 +2821,7 @@
     "HotDog": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "sprite": {
         "position": {
           "x": 60,
@@ -2841,6 +2844,7 @@
     "Bread": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "isIngredient": true,
       "sprite": {
         "position": {
@@ -2864,6 +2868,7 @@
     "VeganPizza": {
       "width": 40,
       "height": 40,
+      "isCooked": true,
       "sprite": {
         "position": {
           "x": 95,
@@ -2886,6 +2891,7 @@
     "SlimyMeatPizza": {
       "width": 40,
       "height": 40,
+      "isCooked": true,
       "cost": {
         "gold": 500
       },
@@ -2908,6 +2914,7 @@
     "LectersDinner": {
       "width": 40,
       "height": 40,
+      "isCooked": true,
       "cost": {
         "gold": 300
       },
@@ -2951,6 +2958,7 @@
     "Potato": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "isIngredient": true,
       "cost": {
         "gold": 150
@@ -3033,6 +3041,7 @@
     "Fries": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "cost": {
         "gold": 100
       },
@@ -3056,6 +3065,7 @@
     "Steak": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "cost": {
         "gold": 200
       },
@@ -3098,6 +3108,7 @@
     "PotatoSoup": {
       "width": 32,
       "height": 32,
+      "isCooked": true,
       "cost": {
         "gold": 200
       },
@@ -3118,6 +3129,7 @@
     "SlimeBroth": {
       "width": 32,
       "height": 32,
+      "isCooked": true,
       "cost": {
         "gold": 200
       },
@@ -3137,6 +3149,7 @@
     "MisoSoup": {
       "width": 32,
       "height": 32,
+      "isCooked": true,
       "cost": {
         "gold": 200
       },
@@ -3156,6 +3169,7 @@
     "Omelette": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "cost": {
         "gold": 200
       },
@@ -3178,6 +3192,7 @@
     "Nigiri": {
       "width": 24,
       "height": 24,
+      "isCooked": true,
       "cost": {
         "gold": 400
       },
@@ -3202,6 +3217,7 @@
     "PumpkinPie": {
       "width": 32,
       "height": 32,
+      "isCooked": true,
       "cost": {
         "gold": 250
       },
