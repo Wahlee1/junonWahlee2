@@ -6049,19 +6049,33 @@
       "description": "Airtight door. No power required to operate"
     },
     "SmallAirlock": {
-      "width": 64,
+      "width": 32,
       "height": 32,
+      "isInteractable": true,
+      "showInteractTooltip": true,
+      "isUpgradable": true,
+      "isAirtight": true,
+      "categories": {"door":true,"melee_resistant":true},
+      "minimapColor": "#3bceaa",
+      "requirements": {
+        "IronBar": 5
+      },
       "cost": {
         "gold": 50
+      },
+      "sprite":{
+        "width": 32,
+        "height": 32
       },
       "stats": {
         "health": 100,
         "count": 125
       },
       "upgrade": {
-        "health": "+25",
-        "count": "+25"
-      }
+        "health": "+15",
+        "count": "+15"
+      },
+      "description":"A smaller airtight door."
     },
     "ResearchTable": {
       "width": 32,
