@@ -972,7 +972,7 @@ class EventHandler {
     // Prevent infinite loops by checking if this event is already being processed
     // disable for now. need to fix to handle nested events
     if (this.processingEvents.has(eventKey)) {
-      if(this.processingOverflow >= 30){
+      if(this.processingOverflow >= 1000){
         const counter = new Error("possible lag machine detected")
         // throw a range error in anticipation of range error...
         counter.name = "RangeError"
