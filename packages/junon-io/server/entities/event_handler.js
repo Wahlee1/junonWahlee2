@@ -22,6 +22,7 @@ class EventHandler {
     this.isRoundStarting = false
     this.processingEvents = new Set() // Track events currently being processed to prevent infinite loops
     this.processingOverflow = 0
+    this.PROCESSING_LIMIT = 25
   }
 
   getSocketUtil() {
@@ -972,16 +973,7 @@ class EventHandler {
     // Prevent infinite loops by checking if this event is already being processed
     // disable for now. need to fix to handle nested events
     if (this.processingEvents.has(eventKey)) {
-      if(this.processingOverflow >= 1000){
-        const counter = new Error("possible lag machine detected")
-        // throw a range error in anticipation of range error...
-        counter.name = "RangeError"
-        throw counter
-        return
-      }
-      else{
-        this.processingOverflow++
-      }
+      this.processingOverflow++
     }
 
     // Mark this event as being processed
@@ -1084,7 +1076,11 @@ class EventHandler {
   }
 
   runAction(action, params) {
-    this.commandDelay = 0 // always reset command delay at beginning
+    if(this.processingOverflow > this.PROCESSING_LIMIT) {
+      this.commandDelay = 0.1 * (this.processingOverflow - this.PROCESSING_LIMIT) // offload if overwhelmed
+    } else {
+      this.commandDelay = 0 // always reset command delay at beginning
+    }
 
     if (action.timer) {
       if (action.timer.shouldRemove) {
