@@ -189,6 +189,10 @@ class EventHandler {
     return Math.exp(this._safeNumber(value))
   }
 
+  tanh(value) {
+    return Math.tanh(this._safeNumber(value))
+  }
+
   log(value, base = Math.E) {
     const numValue = this._safeNumber(value)
     const numBase = this._safeNumber(base)
@@ -211,7 +215,7 @@ class EventHandler {
     return this._fixFloat(result, Math.max(12, -prec + 2))
   }
 
- ceil(value, precision = 0) {
+  ceil(value, precision = 0) {
     const num = this._safeNumber(value)
     const prec = this._safeNumber(precision)
     
@@ -242,6 +246,10 @@ class EventHandler {
 
   cos(value) {
     return Math.cos(this._safeNumber(value))
+  }
+
+  tan(value) {
+    return Math.tan(this._safeNumber(value))
   }
 
   atan2(y, x) {
@@ -510,10 +518,10 @@ class EventHandler {
     return player.getTeam().scoreIndex || 0
   }
 
-  getAngle(playerId) {
-    let player = this.getPlayer(playerId)
-    if (!player) return 0
-    return player.angle
+  getAngle(entityId) {
+    let entity = this.game.getEntity(entityId)
+    if (!entity) return 0
+    return entity.angle
   }
 
   getTeamColor(playerId) {
