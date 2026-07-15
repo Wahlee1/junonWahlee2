@@ -71,6 +71,13 @@
         "message": "message sent by player"
       }
     },
+    "PlayerTerminalMessage": {
+      "description": "Event triggered when a player sends a terminal message",
+      "variables": {
+        "player": "username of player",
+        "message": "message sent by player"
+      }
+    },
     "PlayerAttacked": {
       "description": "Event triggered when a player gets damaged",
       "variables": {
@@ -97,7 +104,16 @@
       "variables": {
         "player": "username of player",
         "row": "row position of player",
-        "col": "row position of player"
+        "col": "column position of player"
+      }
+    },
+    "MobMove": {
+      "description": "Event triggered when mob changes position",
+      "variables": {
+        "entityId": "id of mob",
+        "entityType": "type of mob",
+        "row": "row position of mob",
+        "col": "column position of mob"
       }
     },
     "PlayerRespawn": {
@@ -218,6 +234,13 @@
         "entityType": "type of building ",
         "player": "username of player",
         "playerId": "id of player"
+      }
+    },
+    "BuildingDestroyed": {
+      "description": "Event triggered when a building gets destroyed",
+      "variables": {
+        "entityId": "id of building ",
+        "entityType": "type of building "
       }
     },
     "AsteroidMined": {
@@ -515,10 +538,34 @@
     "ButtonClicked": {
       "description": "Event triggered when a player clicks custom button",
       "variables": {
-        "player": "username of player that clicked",
         "playerId":"id of player",
+        "player": "username of player that clicked",
         "entityId": "id of entity button attached",
         "name": "name of button clicked"
+      }
+    },
+    "PlayerPinged": {
+      "description": "Event triggered when a player is pinged by command",
+      "variables": {
+        "playerId":"id of player",
+        "player": "username of player",
+        "pingId": "id of ping"
+      }
+    },
+    "BuildingPinged": {
+      "description": "Event triggered when a building is pinged by command",
+      "variables": {
+        "entityId":"id of building",
+        "entityType": "type of building",
+        "pingId": "id of ping"
+      }
+    },
+    "MobPinged": {
+      "description": "Event triggered when a mob is pinged by command",
+      "variables": {
+        "entityId":"id of mob",
+        "entityType": "type of mob",
+        "pingId": "id of ping"
       }
     },
     "Timer:start": {

@@ -6,6 +6,7 @@ const Trigger = require("./trigger")
 const Protocol = require('../../common/util/protocol')
 const Helper = require('../../common/helper')
 const Constants = require('../../common/constants.json')
+const EntityGroup = require("./entity_group")
 
 class EventHandler {
   constructor(sector) {
@@ -241,6 +242,10 @@ class EventHandler {
 
   cos(value) {
     return Math.cos(this._safeNumber(value))
+  }
+
+  atan2(y, x) {
+      return Math.atan2(this._safeNumber(y), this._safeNumber(x))
   }
 
   length(value) {
@@ -594,8 +599,8 @@ class EventHandler {
 
     let name = "Timer:" + timer.name + ":tick"
     let params = {
-      "seconds": timer.tick,
-      "remaining": timer.duration - timer.tick
+      "seconds": timer.tick * timer.every,
+      "remaining": timer.duration - (timer.tick * timer.every)
     }
     this.trigger(name, params)
 
@@ -1185,6 +1190,41 @@ class EventHandler {
     return Math.floor(min + rand * (max - min + 1))
   }
 
+  getPlayerId(playerName) {
+    const player = this.game.getPlayerByNameOrId(playerName)
+    
+    if (!player) return undefined
+    return player.getId() || undefined
+  }
+
+  getGoal(entityId) {
+    const entity = this.game.getEntity(entityId)
+
+    if (!entity) return undefined
+    if (!entity.isMob()) return undefined
+    if (entity.goals.length === 0) return undefined
+
+    return entity.getLatestGoal().getTargetEntity().getId()
+  }
+
+  getForceX(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.getBody().force[0]
+    } else {
+      return 0
+    }
+  }
+
+  getForceY(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.getBody().force[1]
+    } else {
+      return 0
+    }
+  }
+  
   isVariableInvalid(key) {
     return key.match(/[^a-zA-Z0-9_$]/)
   }
@@ -1231,6 +1271,7 @@ class EventHandler {
       "$getMaxStamina": true,
       "$getMaxOxygen": true,
       "$getMaxHunger": true,
+      "$getPlayerId": true,
       "$getOwner": true,
       "$random": true,
       "$seedRandom": true,
@@ -1263,6 +1304,7 @@ class EventHandler {
       "$radian": true,
       "$sin": true,
       "$cos": true,
+      "$atan2": true,
       "$isLoggedIn": true,
       "$getEquipId": true,
       "$getBuildingType": true,
@@ -1273,9 +1315,12 @@ class EventHandler {
       "$getStructureByCoords": true,
       "$hasEffect": true,
       "$getTotalMobCount": true,
+      "$getGoal": true,
       "$getAngle": true,
       "$getUsage": true,
-      "$getCapacity": true
+      "$getCapacity": true,
+      "$getForceX": true,
+      "$getForceY": true
     }
   }
 

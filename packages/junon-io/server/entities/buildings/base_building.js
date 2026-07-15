@@ -1943,6 +1943,15 @@ class BaseBuilding extends BaseEntity {
     return _.isEqual(json, otherJson)
   }
 
+  ping(id) {
+    let data = {
+      entityId: this.getId(),
+      entityType: this.getTypeName(),
+      pingId: parseInt(id)
+    }
+    this.game.triggerEvent("BuildingPinged", data)
+  }
+
 }
 
 Object.assign(BaseBuilding.prototype, Upgradable.prototype, {
@@ -1981,7 +1990,8 @@ Object.assign(BaseBuilding.prototype, Destroyable.prototype, {
     this.remove()
 
     let data = {
-      entityId: this.getId()
+      entityId: this.getId(),
+      entityType: this.getTypeName(),
     }
     this.game.triggerEvent("BuildingDestroyed", data)
   },
@@ -2029,6 +2039,7 @@ Object.assign(BaseBuilding.prototype, Destroyable.prototype, {
     }
   }
 })
+
 
 Object.assign(BaseBuilding.prototype, ShipMountable.prototype, {
   getRelativeX() {

@@ -5851,6 +5851,15 @@ class Player extends BaseEntity {
     this.changedRooms = {}
   }
 
+  ping(id) {
+    let data = {
+      playerId: this.getId(),
+      player: this.getName(),
+      pingId: parseInt(id)
+    }
+    this.game.triggerEvent("PlayerPinged", data)
+  }
+
 }
 
 Object.assign(Player.prototype, Upgradable.prototype)
