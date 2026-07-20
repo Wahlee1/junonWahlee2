@@ -2057,7 +2057,12 @@ Object.assign(BaseBuilding.prototype, Powerable.prototype, {
   onPowerChanged() {
     this.onStateChanged("usage")
     this.onStateChanged("isPowered")
-    this.game.triggerEvent("IsPowerChanged", { entityId: this.getId(), isPowered: this.isPowered })
+    let data = {
+      entityId: this.getId(),
+      entityType: this.getTypeName(),
+      isPowered: this.isPowered
+    }
+    this.game.triggerEvent("IsPowerChanged", data)
   }
 })
 

@@ -568,6 +568,14 @@
         "pingId": "id of ping"
       }
     },
+    "IsPowerChanged": {
+      "description": "Event triggered when a building power state changes",
+      "variables": {
+        "entityId":"id of building",
+        "entityType": "type of building",
+        "isPowered": "true if powered, false if not"
+      }
+    },
     "Timer:start": {
       "description": "Event triggered when timer starts",
       "variables": {

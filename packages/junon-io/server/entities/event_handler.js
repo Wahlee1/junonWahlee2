@@ -369,6 +369,13 @@ class EventHandler {
     return content    
   }
 
+  getIsPowered(buildingId) {
+    let building = this.game.getEntity(buildingId)
+    
+    if (!building) return undefined
+    
+    return building.isPowered
+  }
 
   getUsage(itemId) {
     let item = this.game.getEntity(itemId)
@@ -524,6 +531,15 @@ class EventHandler {
     return entity.angle
   }
 
+  getName(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.name
+    } else {
+      return undefined
+    }
+  }
+
   getTeamColor(playerId) {
     let player = this.game.players[playerId]
     if (!player) return 'f'
@@ -649,7 +665,7 @@ class EventHandler {
   }
 
   hasReachedMaxVariableCount() {
-    return Object.keys(this.variables).length >= 100
+    return Object.keys(this.variables).length >= 10000
   }
 
   loadVariables(variables) {
@@ -1232,7 +1248,7 @@ class EventHandler {
       return 0
     }
   }
-  
+
   isVariableInvalid(key) {
     return key.match(/[^a-zA-Z0-9_$]/)
   }
@@ -1325,6 +1341,8 @@ class EventHandler {
       "$getTotalMobCount": true,
       "$getGoal": true,
       "$getAngle": true,
+      "$getName": true,
+      "$getIsPowered": true,
       "$getUsage": true,
       "$getCapacity": true,
       "$getForceX": true,

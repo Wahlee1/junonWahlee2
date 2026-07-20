@@ -7,6 +7,7 @@
       "/projectile is now visible in /help command",
       "Fixed /setstatus, now can be used from command block",
       "Fixed /menu, now can be used from command block",
+      "Fixed /getnthletter doesn't return undefined when invalid index",
       "Fixed HTML syntax error in command block functions near $getPlatformByCoords"
     ],
     "features": [
@@ -15,6 +16,7 @@
       "Added PlayerTerminalMessage trigger",
       "Added BuildingDestroyed trigger",
       "Added PlayerPinged, MobPinged, BuildingPinged triggers(may be activated with /ping command)",
+      "Added IsPowerChanged trigger",
       "Added $getPlayerId function",
       "Added $getForceY function(returns force given by /force command)",
       "Added $getForceX function",
@@ -22,12 +24,15 @@
       "Added $tan(tangent) function",
       "Added $atan2 function",
       "Added $tanh(hyperbolic tangent) function",
+      "Added $getName function, returns name of entity",
+      "Added $getIsPowered function, returns true if building is powered",
       "Now $getAngle works with mobs and buildings too",
       "Added /ping command(activates ...Pinged trigger)",
       "Added /goal command to manage mobs' goals",
       "/interact [entityId] angle ... now works on players and mobs too",
       "/interact [entityId] attack [target]: new subcommand",
-      "/wait command now uses float seconds instead of int"
+      "/wait command now uses float seconds instead of int",
+      "/variable command now can set up to 10000 variables"
     ]
   }
 }
