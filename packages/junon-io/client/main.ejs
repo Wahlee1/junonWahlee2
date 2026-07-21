@@ -857,6 +857,11 @@
                             <td>The max amount of hunger player currently has (usually 100). Ex. /chat @a $player now has maximum hunger of $getMaxHunger($player)</td>
                         </tr>
                         <tr>
+                            <td class="function_name">$getPlayerId</td>
+                            <td>$player</td>
+                            <td>The id of player.</td>
+                        </tr>
+                        <tr>
                             <td class='function_name'>$getOwner</td>
                             <td>buildingId</td>
                             <td>The id of owner. Ex. /setowner @b[type=wall] $getOwner(2917)</td>
@@ -982,6 +987,11 @@
                             <td>Returns the absolute value of a number. Ex. $abs(-4.5) = 4.5</td>
                         </tr>
                         <tr>
+                            <td class='function_name'>$tanh</td>
+                            <td>value</td>
+                            <td>Calculates hyperbolic tangent of a number.</td>
+                        </tr>
+                        <tr>
                             <td class='function_name'>$max</td>
                             <td>value1, value2, ... , valueN</td>
                             <td>Returns the largest value among the given arguments. Ex. $max(9,2,15) = 15</td>
@@ -1005,6 +1015,16 @@
                             <td class='function_name'>$cos</td>
                             <td>value</td>
                             <td>Calculates cos of a number.</td>
+                        </tr>
+                        <tr>
+                            <td class='function_name'>$tan</td>
+                            <td>value</td>
+                            <td>Calculates tangent of a number.</td>
+                        </tr>
+                        <tr>
+                            <td class='function_name'>$atan2</td>
+                            <td>y, x</td>
+                            <td>Returns angle of in radians from y/x.</td>
                         </tr>
                         <tr>
                             <td class='function_name'>$isLoggedIn</td>
@@ -1039,22 +1059,37 @@
                         <tr>
                             <td class='function_name'>$getPlatformByCoords</td>
                             <td>$row, $col</td>
-                            <td>Returns the id of a platform based on the row and col specified. Ex. /chat @a the id of the floor at 2, 2 is $getPlatformByCoords(2,2)td>
+                            <td>Returns the id of a platform based on the row and col specified. Ex. /chat @a the id of the floor at 2, 2 is $getPlatformByCoords(2,2)</td>
                         </tr>
                         <tr>
                             <td class='function_name'>$hasEffect</td>
                             <td>$entityId, effectName</td>
-                            <td>true if the entity, player, or building gets the specified effect. false if not.</td>
+                            <td>true if the entity, player, or building gets the specified effect. false if not</td>
                         </tr>
                         <tr>
                             <td class='function_name'>$getTotalMobCount</td>
                             <td>None</td>
-                            <td>Returns the total count of all mobs in the game sector (hostile + neutral).</td>
+                            <td>Returns the total count of all mobs in the game sector (hostile + neutral)</td>
+                        </tr>
+                        <tr>
+                            <td class='function_name'>$getGoal</td>
+                            <td>$entityId</td>
+                            <td>Returns the goal of mob</td>
                         </tr>
                         <tr>
                             <td class='function_name'>$getAngle</td>
-                            <td>$player</td>
-                            <td>Returns the angle of the specified player. Ex. /chat @a $getAngle($player)</td>
+                            <td>$entityId/$playerId</td>
+                            <td>Returns the angle of the specified entity or player. Ex. /chat @a $getAngle($entityId/$playerId)</td>
+                        </tr>
+                        <tr>
+                            <td class='function_name'>$getName</td>
+                            <td>$entityId/$playerId</td>
+                            <td>Returns the name of the specified entity or player. Ex. /chat @a $getName($entityId/$playerId)</td>
+                        </tr>
+                        <tr>
+                            <td class="function_name">$getIsPowered</td>
+                            <td>$buildingId</td>
+                            <td>Returns true if building is powered, else false</td>
                         </tr>
                         <tr>
                             <td class="function_name">$getUsage</td>
@@ -1065,6 +1100,16 @@
                             <td class="function_name">$getCapacity</td>
                             <td>$itemId</td>
                             <td>Returns the usage capacity of an item</td>
+                        </tr>
+                        <tr>
+                            <td class="function_name">$getForceX</td>
+                            <td>$entityId</td>
+                            <td>Returns the x force applied on entity</td>
+                        </tr>
+                        <tr>
+                            <td class="function_name">$getForceY</td>
+                            <td>$entityId</td>
+                            <td>Returns the y force applied on entity</td>
                         </tr>
                     </table>
                 </div>
