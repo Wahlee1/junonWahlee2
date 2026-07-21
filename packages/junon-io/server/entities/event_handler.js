@@ -6,6 +6,7 @@ const Trigger = require("./trigger")
 const Protocol = require('../../common/util/protocol')
 const Helper = require('../../common/helper')
 const Constants = require('../../common/constants.json')
+const EntityGroup = require("./entity_group")
 
 class EventHandler {
   constructor(sector) {
@@ -188,6 +189,10 @@ class EventHandler {
     return Math.exp(this._safeNumber(value))
   }
 
+  tanh(value) {
+    return Math.tanh(this._safeNumber(value))
+  }
+
   log(value, base = Math.E) {
     const numValue = this._safeNumber(value)
     const numBase = this._safeNumber(base)
@@ -210,7 +215,7 @@ class EventHandler {
     return this._fixFloat(result, Math.max(12, -prec + 2))
   }
 
- ceil(value, precision = 0) {
+  ceil(value, precision = 0) {
     const num = this._safeNumber(value)
     const prec = this._safeNumber(precision)
     
@@ -241,6 +246,14 @@ class EventHandler {
 
   cos(value) {
     return Math.cos(this._safeNumber(value))
+  }
+
+  tan(value) {
+    return Math.tan(this._safeNumber(value))
+  }
+
+  atan2(y, x) {
+      return Math.atan2(this._safeNumber(y), this._safeNumber(x))
   }
 
   length(value) {
@@ -356,6 +369,13 @@ class EventHandler {
     return content    
   }
 
+  getIsPowered(buildingId) {
+    let building = this.game.getEntity(buildingId)
+    
+    if (!building) return undefined
+    
+    return building.isPowered
+  }
 
   getUsage(itemId) {
     let item = this.game.getEntity(itemId)
@@ -505,10 +525,19 @@ class EventHandler {
     return player.getTeam().scoreIndex || 0
   }
 
-  getAngle(playerId) {
-    let player = this.getPlayer(playerId)
-    if (!player) return 0
-    return player.angle
+  getAngle(entityId) {
+    let entity = this.game.getEntity(entityId)
+    if (!entity) return 0
+    return entity.angle
+  }
+
+  getName(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.name
+    } else {
+      return undefined
+    }
   }
 
   getTeamColor(playerId) {
@@ -594,8 +623,8 @@ class EventHandler {
 
     let name = "Timer:" + timer.name + ":tick"
     let params = {
-      "seconds": timer.tick,
-      "remaining": timer.duration - timer.tick
+      "seconds": timer.tick * timer.every,
+      "remaining": timer.duration - (timer.tick * timer.every)
     }
     this.trigger(name, params)
 
@@ -636,7 +665,7 @@ class EventHandler {
   }
 
   hasReachedMaxVariableCount() {
-    return Object.keys(this.variables).length >= 100
+    return Object.keys(this.variables).length >= 10000
   }
 
   loadVariables(variables) {
@@ -1185,6 +1214,41 @@ class EventHandler {
     return Math.floor(min + rand * (max - min + 1))
   }
 
+  getPlayerId(playerName) {
+    const player = this.game.getPlayerByNameOrId(playerName)
+    
+    if (!player) return undefined
+    return player.getId() || undefined
+  }
+
+  getGoal(entityId) {
+    const entity = this.game.getEntity(entityId)
+
+    if (!entity) return undefined
+    if (!entity.isMob()) return undefined
+    if (entity.goals.length === 0) return undefined
+
+    return entity.getLatestGoal().getTargetEntity().getId()
+  }
+
+  getForceX(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.getBody().force[0]
+    } else {
+      return 0
+    }
+  }
+
+  getForceY(entityId) {
+    const entity = this.game.getEntity(entityId)
+    if (entity) {
+      return entity.getBody().force[1]
+    } else {
+      return 0
+    }
+  }
+
   isVariableInvalid(key) {
     return key.match(/[^a-zA-Z0-9_$]/)
   }
@@ -1231,6 +1295,7 @@ class EventHandler {
       "$getMaxStamina": true,
       "$getMaxOxygen": true,
       "$getMaxHunger": true,
+      "$getPlayerId": true,
       "$getOwner": true,
       "$random": true,
       "$seedRandom": true,
@@ -1263,6 +1328,7 @@ class EventHandler {
       "$radian": true,
       "$sin": true,
       "$cos": true,
+      "$atan2": true,
       "$isLoggedIn": true,
       "$getEquipId": true,
       "$getBuildingType": true,
@@ -1273,9 +1339,14 @@ class EventHandler {
       "$getStructureByCoords": true,
       "$hasEffect": true,
       "$getTotalMobCount": true,
+      "$getGoal": true,
       "$getAngle": true,
+      "$getName": true,
+      "$getIsPowered": true,
       "$getUsage": true,
-      "$getCapacity": true
+      "$getCapacity": true,
+      "$getForceX": true,
+      "$getForceY": true
     }
   }
 

@@ -19,7 +19,8 @@ class Menu extends BaseCommand {
         let menuName = args[1]
         let player = args[2]
         let multiplePlayers
-        if(!caller || !caller.isPlayer()) return
+        // if(!caller || !caller.isPlayer()) return
+        // Commented cuz of didn't work in command block and useless
 
         if(player) {
             player = this.getPlayersBySelector(player)

@@ -1059,9 +1059,9 @@ class Game {
   }
 
   runTimers() {
-    const isOneSecondInterval = this.timestamp % Constants.physicsTimeStep === 0
-    if (!isOneSecondInterval) return
-
+    const isIntervalElapsed = this.timestamp % (Constants.physicsTimeStep / 20) === 0
+    if (!isIntervalElapsed) return
+    
     for (let name in this.timers) {
       let timer = this.timers[name]
       if (!timer.tick) {
@@ -1071,7 +1071,7 @@ class Game {
 
       timer.tick += 1
       if (timer.every) {
-        if (timer.tick % timer.every === 0) {
+        if (timer.tick % Math.round(timer.every * 20) === 0) {
           this.sector.eventHandler.triggerTimerTick(timer)
         }
       } else {
