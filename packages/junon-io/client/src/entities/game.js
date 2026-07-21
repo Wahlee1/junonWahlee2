@@ -1968,8 +1968,6 @@ class Game {
     this.main.showHomeMenu()
     this.main.hideMainMenu()
     this.hideDeathMessage()
-
-    this.main.displayHomePageAd()
   }
 
   onEntityChunkRegionPath(data) {
