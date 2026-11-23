@@ -22,6 +22,7 @@ const Blueprint = require("./blueprint")
 const Ship = require("./ship")
 const Projectiles = require("./projectiles/index")
 const Equipments = require("./equipments/index")
+const Bars = require("./bars/index")
 const Item = require("./item")
 const Pickup = require("./pickup")
 const Camera = require("./camera")
@@ -60,6 +61,9 @@ class Player extends BaseEntity {
     this.sessionId = socket.sessionId
     this.remoteAddress = Helper.getSocketRemoteAddress(socket)
     this.fingerprint = data.fingerprint
+    this.zoomLevel = 1
+    this.minZoom = 0.5
+    this.maxZoom = 3
 
     if (this.sector.isZoomAllowed()) {
       this.screenWidth = this.socket.screenWidth
@@ -215,6 +219,7 @@ class Player extends BaseEntity {
         return
       }
       this.badge = badge
+      this.badgeColor = badge.getColor()
       this.getSocketUtil().broadcast(this.game.getSocketIds(), "BadgeEquipped", {
         badge: {
           name: badge.getName(),
@@ -519,9 +524,8 @@ class Player extends BaseEntity {
 
     this.score = data.score || 0
 
-    // kuroro
     if (this.isGameDev()) {
-      if (this.name === 'kuroro') {
+      if (this.name === 'BigTforLife') {
         this.isAdminMode = true
       }
     } else if (this.isMod()) {
@@ -686,12 +690,12 @@ class Player extends BaseEntity {
   }
 
   isMod() {
-    return this.uid === 'nPu0Js7belaeI6UdSz6AkPBdUkw2' // tobor1
+    return this.uid === '5t1H4HSXgGRzCw0isgiwxBf2cXn2' 
   }
 
   isGameDev() {
     return this.uid === 'jEleFj7LAVhfv8FwLEKejEj6ESx2' ||
-           this.uid === '8LuO6XRih2dRNfvtjaS2TwnLWzm1'
+           this.uid === '5t1H4HSXgGRzCw0isgiwxBf2cXn2'
   }
 
   createSurvivalTool() {
@@ -784,6 +788,10 @@ class Player extends BaseEntity {
     this.game.addPlayer(this)
 
     this.repositionOnPlayerTree()
+
+    if (this.sector.isFovMode() && !this.shouldSkipFov()) {
+      this.assignFov()
+    }
 
     this.updateCurrentUser()
 
@@ -1908,13 +1916,65 @@ class Player extends BaseEntity {
     const sourceStorage      = this.getStorage(data.sourceStorageId)
     const destinationStorage = this.getStorage(data.destinationStorageId)
     const sourceIndex        = data.sourceIndex
-    const destinationIndex   = data.destinationIndex
+    let destinationIndex     = data.destinationIndex
+
+    if (!sourceStorage || !destinationStorage || sourceIndex < 0 ||
+        sourceIndex >= sourceStorage.getStorageLength()) return
+
+    if (!data.hasOwnProperty("destinationIndex") &&
+        sourceStorage.isInventory() &&
+        typeof destinationStorage.isBuildingStorage === "function" &&
+        destinationStorage.isBuildingStorage()) {
+      const sourceItem = sourceStorage.get(sourceIndex)
+      if (!sourceItem) return
+
+      let hasValidSlot = false
+      destinationIndex = -1
+
+      for (let index = 0; index < destinationStorage.getStorageLength(); index++) {
+        const storedItem = destinationStorage.get(index)
+        const canStore = destinationStorage.canStoreAt(index) &&
+          destinationStorage.canStore(index, sourceItem)
+        if (!canStore) continue
+
+        hasValidSlot = true
+        if (storedItem && storedItem.type === sourceItem.type &&
+            storedItem.isStackableType() && !storedItem.isFullyStacked()) {
+          destinationIndex = index
+          break
+        }
+      }
+
+      if (destinationIndex === -1) {
+        for (let index = 0; index < destinationStorage.getStorageLength(); index++) {
+          if (destinationStorage.get(index)) continue
+          if (!destinationStorage.canStoreAt(index) ||
+              !destinationStorage.canStore(index, sourceItem)) continue
+
+          destinationIndex = index
+          break
+        }
+      }
+
+      if (destinationIndex === -1) {
+        this.showError(hasValidSlot ? "Inventory Full" : "Invalid Item")
+        return
+      }
+
+      data = Object.assign({}, data, { destinationIndex })
+    }
 
     const isInvalidOperation = !sourceStorage || !destinationStorage || sourceIndex < 0 || destinationIndex < 0 ||
                               sourceIndex >= sourceStorage.getStorageLength() ||
                               destinationIndex >= destinationStorage.getStorageLength() ||
                               !destinationStorage.canStoreAt(destinationIndex)
     if (isInvalidOperation) return
+
+    for (const storage of [sourceStorage, destinationStorage]) {
+      if (typeof storage.isKeypadProtectedStorage === "function" &&
+          storage.isKeypadProtectedStorage() &&
+          !storage.hasKeypadStorageAccess(this)) return
+    }
 
     const nonInventoryStorage = this.getNonInventoryStorage(sourceStorage, destinationStorage)
 
@@ -1966,33 +2026,49 @@ class Player extends BaseEntity {
     // TODO: validate that its within view of user
     const storage = this.game.getEntity(data.id)
     if (storage) {
+      const isKeypadProtectedStorage =
+        typeof storage.isKeypadProtectedStorage === "function" &&
+        storage.isKeypadProtectedStorage()
+
       if (!storage.isReachableFromRoom(this.getOccupiedRoom())) {
         this.showError("Unreachable")
         return
       }
 
-      if (storage.hasOwner() && !this.hasOwnership(storage)) {
-        this.showError("That doesnt belong to you")
-        return
-      }
+      const hasKeypadAuthorization = isKeypadProtectedStorage &&
+        storage.authorizeStorageView(this)
 
-      if (!storage.hasCategory("vending_machine")) {
-        if (storage.owner &&
-            storage.owner.isTeam() &&
-            !this.canAccessStorage(storage)) {
-          this.showError("Permission Denied")
+      if (!hasKeypadAuthorization) {
+        if (storage.hasOwner() &&
+            !this.hasOwnership(storage) &&
+            !storage.hasCategory("vending_machine")) {
+          this.showError("That doesnt belong to you")
           return
+        }
+
+        if (!storage.hasCategory("vending_machine")) {
+          if (storage.owner &&
+              storage.owner.isTeam() &&
+              !this.canAccessStorage(storage)) {
+            this.showError("Permission Denied")
+            return
+          }
         }
       }
 
-    storage.addViewSubscriber(this)
-    this.getSocketUtil().emit(this.socket, "RenderStorage", {
-      id: storage.id,
-      inventory: storage,
-      progress: typeof storage.getProgressPercentage === "function"
-        ? storage.getProgressPercentage()
-        : 0
-    })
+      if (isKeypadProtectedStorage && !hasKeypadAuthorization) {
+        this.showError("Enter the keypad code to access this safe", { isWarning: true })
+        return
+      }
+
+      storage.addViewSubscriber(this)
+      this.getSocketUtil().emit(this.socket, "RenderStorage", {
+        id: storage.id,
+        inventory: storage,
+        progress: typeof storage.getProgressPercentage === "function"
+          ? storage.getProgressPercentage()
+          : 0
+      })
     }
   }
 
@@ -2014,6 +2090,62 @@ class Player extends BaseEntity {
 
   craft(data) {
     const storage = this.getStorage(data.storageId)
+    if (!storage) return
+
+    // Validate station-based crafting on the server; client menu restrictions
+    // are not security checks. Keep the deprecated shipyard's behavior unchanged.
+    const sourceStorage = data.sourceStorageId ? this.getStorage(data.sourceStorageId) : null
+    const shipyardType = Protocol.definition().BuildingType.ShipyardConstructor
+    const isDeprecatedShipyard = sourceStorage &&
+      typeof sourceStorage.getType === "function" &&
+      sourceStorage.getType() === shipyardType
+
+    if (!isDeprecatedShipyard) {
+      if (data.sourceStorageId && !sourceStorage) return
+
+      // Bars require a furnace even if the client omits the station ID.
+      if (Bars.forType(data.type) && !sourceStorage) return
+
+      if (sourceStorage) {
+        // A supplied source must be a real crafting building that accepts this
+        // recipe. This also prevents using an arbitrary building as a crafter.
+        if (typeof sourceStorage.isBuildingStorage !== "function" ||
+            !sourceStorage.isBuildingStorage() ||
+            typeof sourceStorage.isCraftingStorage !== "function" ||
+            !sourceStorage.isCraftingStorage() ||
+            typeof sourceStorage.canCraft !== "function" ||
+            !sourceStorage.canCraft(data.type)) return
+
+        // Use the same per-building interaction range as normal interactions.
+        const distance = this.game.distanceBetween(this, sourceStorage)
+        if (distance >= sourceStorage.getInteractDistance()) {
+          this.showError("Too far away from " + Helper.getTypeNameById(sourceStorage.getType()), { isWarning: true })
+          return
+        }
+
+        // DISABLED for now:
+        // // Reject a station interaction if another obstacle blocks the path.
+        // const raycast = this.getContainer().raycast(
+        // this.getX(),
+        // this.getY(),
+        // sourceStorage.getX(),
+        // sourceStorage.getY(),
+        // distance,
+        // this
+        // )
+        // if (raycast && raycast.entity !== sourceStorage) return
+
+        // DISABLED for now: this blanket power check rejected furnaces (they have no power role) on worlds without infinite power. Stations that need power already check it in their own craft(). Remove the // marks to bring it back.
+        // // Station-based crafting must respect the station's power requirement.
+        // if (typeof sourceStorage.hasMetPowerRequirement === "function" &&
+        // !sourceStorage.hasMetPowerRequirement()) return
+
+        // Bars may only be produced by a furnace, not another station.
+        if (Bars.forType(data.type) &&
+            sourceStorage.getType() !== Protocol.definition().BuildingType.Furnace) return
+      }
+    }
+
     if (storage.hasCategory("power_consumer") && !storage.isPowered) return
     if (!storage.isCraftingStorage()) return
     if (storage.isFull(data.type)) {
@@ -2172,7 +2304,7 @@ class Player extends BaseEntity {
         playerId: this.id,
         inventory: this.inventory,
         sector: sector,
-        players: sector.players,
+        players: sector.isFovMode() && !this.shouldSkipFov() ? this.visiblePlayers : sector.players,
         equipIndex: this.equipIndex
       })
     }
@@ -2465,14 +2597,15 @@ class Player extends BaseEntity {
   }
 
   assignFov() {
-    this.fovTileHits = this.sector.fovManager.calculateFov(this)
+    this.fovTileHits = this.hasFovImmunity() ? {} : this.sector.fovManager.calculateFov(this)
     this.determineVisiblePlayers()
     this.determineVisibleCorpses()
     this.determineVisibleMobs()
   }
 
   hasSameViewDistance(player, otherPlayer) {
-    return player.getMaxViewDistance() === otherPlayer.getMaxViewDistance()
+    return player.getMaxViewDistance() === otherPlayer.getMaxViewDistance() &&
+      player.hasFovImmunity() === otherPlayer.hasFovImmunity()
   }
 
   determineVisiblePlayers() {
@@ -2750,7 +2883,9 @@ class Player extends BaseEntity {
   getVisibleCorpses() {
     let visible = {}
 
-    let corpses = this.sector.unitTree.search(this.getCameraBoundingBox())
+    let corpses = this.hasFovImmunity()
+      ? this.sector.unitTree.all()
+      : this.sector.unitTree.search(this.getCameraBoundingBox())
 
     for (var i = 0; i < corpses.length; i++) {
       let corpse = corpses[i]
@@ -2766,7 +2901,9 @@ class Player extends BaseEntity {
   getVisibleMobs() {
     let visible = {}
 
-    let mobs = this.sector.mobTree.search(this.getCameraBoundingBox())
+    let mobs = this.hasFovImmunity()
+      ? this.sector.mobTree.all()
+      : this.sector.mobTree.search(this.getCameraBoundingBox())
 
     for (var i = 0; i < mobs.length; i++) {
       let mob = mobs[i]
@@ -2807,8 +2944,17 @@ class Player extends BaseEntity {
   }
 
   isTileVisible(row, col) {
+    if (this.hasFovImmunity()) return true
+
     let tileKey = [row, col].join("-")
     return this.fovTileHits[tileKey]
+  }
+
+  hasFovImmunity() {
+    const custom = this.sector && this.sector.entityCustomStats
+      ? this.sector.entityCustomStats[this.id]
+      : null
+    return !!(custom && custom.fovImmunity === true)
   }
 
   recalculateFovIfHitPresent(hits) {
@@ -2834,21 +2980,32 @@ class Player extends BaseEntity {
     let relativeBox = this.getPaddedRelativeBox()
     const hits = this.getContainer().structureMap.hitTestTile(relativeBox)
     hits.forEach((hit) => {
-      if (hit.entity) this.onHitEntity(hit.entity, hit)
+      if (hit.entity && hit.entity.getType() !== Protocol.definition().BuildingType.MiasmaGate) {
+        this.onHitEntity(hit.entity, hit)
+      }
+    })
+
+    this.checkPreciseInteractables()
+  }
+
+  checkPreciseInteractables() {
+    if (!this.getContainer().isSector()) return
+
+    const hits = this.getContainer().structureMap.hitTestTile(this.getRelativeBox())
+    hits.forEach((hit) => {
+      if (hit.entity && hit.entity.getType() === Protocol.definition().BuildingType.MiasmaGate) {
+        this.removeEffect('miasma')
+      }
     })
   }
 
   shouldSkipFov() {
     if (this.ghost) return true
-    return this.skipFov
+    return this.skipFov || this.hasFovImmunity()
   }
 
   onHitEntity(entity, hit) {
     if (this.isControllingGhost()) return
-
-    if (entity.getType() === Protocol.definition().BuildingType.MiasmaGate) {
-      this.removeEffect('miasma')
-    }
 
     if (entity.hasCategory("door") && entity.isAutomatic()) {
       if (!this.sector.isTutorial() && !entity.isOwnedBy(this)) return
@@ -3293,11 +3450,14 @@ class Player extends BaseEntity {
     this.spawnPosition = { x: this.getX(), y: this.getY() }
   }
 
-  onPressKeyChanged(pressedKey) {
-    if (!pressedKey) return
+  onPressKeyChanged(pressedKey, pressedKeyName) {
+    if (!pressedKey && !pressedKeyName) return
 
-    let char = String.fromCharCode(pressedKey).toLowerCase()
-
+    let char = typeof pressedKeyName === 'string' && pressedKeyName.length > 0
+      ? pressedKeyName
+      : String.fromCharCode(pressedKey).toLowerCase()
+    if (char === ' ') char = 'Space'
+    
     this.game.triggerEvent("PlayerKeyboard", {
       playerId: this.id,
       player: this.getName(),
@@ -3314,9 +3474,11 @@ class Player extends BaseEntity {
       let prevActionOn = (this.controlKeys >> (actionKeyBitIndex - 1)) % 2 === 1
 
       this.controlKeys = data.controlKeys
-      if (this.pressedKey !== data.pressedKey) {
+      const pressedKeyName = data.pressedKeyName || ''
+      if (this.pressedKey !== data.pressedKey || this.pressedKeyName !== pressedKeyName) {
         this.pressedKey = data.pressedKey
-        this.onPressKeyChanged(this.pressedKey)
+        this.pressedKeyName = pressedKeyName
+        this.onPressKeyChanged(this.pressedKey, this.pressedKeyName)
       }
 
       let currActionOff = (this.controlKeys >> (actionKeyBitIndex - 1)) % 2 === 0
@@ -4324,6 +4486,20 @@ class Player extends BaseEntity {
 
     if (this.getRole()) {
       let canBuild = this.getRole().isAllowedTo("Build") || byPassRoleBuildPermission
+      let buildingTypeName = buildingKlass.prototype.getTypeName()
+
+      if (["Safe", "KeypadDoor"].indexOf(buildingTypeName) !== -1 &&
+          !this.getRole().isAllowedTo("BuildKeypadStructures")) {
+        this.showError("You dont have permission to build keypad structures")
+        return null
+      }
+
+      if (buildingKlass.prototype.hasCategory("vending_machine") &&
+          !this.getRole().isAllowedTo("SellToPlayers")) {
+        this.showError("You dont have permission to build vending machines")
+        return null
+      }
+
       let ownerOnly = ["UnbreakableWall"]
       if(ownerOnly.indexOf(buildingKlass.prototype.getTypeName()) != -1) {
         if(!this.isSectorOwner()) {
@@ -4363,7 +4539,8 @@ class Player extends BaseEntity {
         }
       }
 
-      if (building.hasCategory("editable_permissions")) {
+      if (building.hasCategory("editable_permissions") &&
+          building.shouldInheritCustomAccess()) {
         if (this.lastCustomAccess && this.lastCustomAccess.type === building.type) {
           building.setIsCustomAccess(true)
           building.setAccessType(this.lastCustomAccess.accessType)
@@ -5067,6 +5244,9 @@ class Player extends BaseEntity {
     if (this.sector.isZoomAllowed()) {
       this.screenWidth = data.screenWidth
       this.screenHeight = data.screenHeight
+      if (Number.isFinite(Number(data.zoomLevel))) this.zoomLevel = Number(data.zoomLevel)
+      if (Number.isFinite(Number(data.minZoom))) this.minZoom = Number(data.minZoom)
+      if (Number.isFinite(Number(data.maxZoom))) this.maxZoom = Number(data.maxZoom)
     }
     this.requestNewChunks()
   }
@@ -5686,12 +5866,12 @@ class Player extends BaseEntity {
 
       this.lastMessage = message
 
-      this.game.triggerEvent("PlayerMessage", {
-        message: message,
-        player: this.getName()
-      })
-
       if (data.isGlobal) {
+        if (this.sector.settings.isGlobalChatEnabled === false) {
+          this.showError("Global chat is disabled in this world", { isWarning: true })
+          return
+        }
+
         LOG.info("globalchat> " + this.name + ": " + message)
         let data = { username: this.name, message: message, prefixesList:JSON.stringify(this.game.playerChatPrefixes||{})}
         if (this.isLoggedIn()) {
@@ -5699,6 +5879,11 @@ class Player extends BaseEntity {
         }
         this.game.sendToMatchmaker({ event: "GlobalClientChat", data: data })
       } else {
+        this.game.triggerEvent("PlayerMessage", {
+          message: message,
+          player: this.getName()
+        })
+
         LOG.info("[" + this.game.getSectorUid() + "] chat> " + this.name + ": " + message)
         let data = { playerId: this.id, message: message, username: this.name, isTeam: isTeamChat,prefixesList:JSON.stringify(this.game.playerChatPrefixes||{})}
         if (this.isLoggedIn()) {
@@ -5979,7 +6164,10 @@ class Player extends BaseEntity {
   }
 
   getMaxViewDistance() {
-    return this.viewDistance || Constants.fovViewDistance
+    const custom = this.sector && this.sector.entityCustomStats
+      ? this.sector.entityCustomStats[this.id]
+      : null
+    return this.viewDistance || (custom && custom.fovRange) || Constants.fovViewDistance
   }
 
   setViewDistance(distance) {

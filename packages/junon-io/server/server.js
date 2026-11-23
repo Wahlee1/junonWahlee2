@@ -262,7 +262,8 @@ class Server {
 
   getSystemdServiceIndex() {
     let systemctlStatus = require('child_process').execSync(`systemctl status ${process.pid}`).toString()
-    let index = systemctlStatus.match(/junon-io@(\d+).service/)[1]
+    let match = systemctlStatus.match(/junon-io@(\d+).service/)
+    let index = match ? match[1] : (process.env.JUNON_INSTANCE_INDEX || "1")
     return index
   }
 
@@ -275,7 +276,7 @@ class Server {
     if (debugMode) {
       unixSocket = process.env.HOME + "/liveness_probe"
     } else {
-      unixSocket = "/var/run/liveness_probe_" + this.systemdIndex
+      unixSocket = (process.env.LIVENESS_SOCKET_DIR || "/var/run") + "/liveness_probe_" + this.systemdIndex
     }
 
     if (fs.existsSync(unixSocket)) {
@@ -582,10 +583,12 @@ class Server {
     }
 
     LOG.info("Creating game for " + sectorId)
+    let loadStartedAt = Date.now()
 
     Profiler.start("createGame - game.init")
     await game.init(options)
     Profiler.stop("createGame - game.init")
+    LOG.info("World loaded: " + sectorId + " in " + ((Date.now() - loadStartedAt) / 1000).toFixed(1) + " s")
 
     if (!game.sector) {
       return { error: "Error in game create" }
@@ -715,6 +718,7 @@ class Server {
 
       let locals = {
         nodeEnv: env,
+        downloadOnly: false, // the dev web server always serves the playable client
         gameVersion: gameVersion,
         revision: this.gameRevision,
         protocolHash: protocolHash,
@@ -1209,10 +1213,10 @@ class Server {
 
     app.post('/toggle', (res, req) => {
       res.writeHeader('Access-Control-Allow-Origin','*')
-      let token = "aGlkZGVu"
+      let token = process.env.TOGGLE_TOKEN
 
       this.readJson(res, (body) => {
-        if (body.token !== token) return
+        if (!token || body.token !== token) return
 
         let result = this.toggleStatusInMatchmaker()
 

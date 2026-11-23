@@ -36,6 +36,7 @@ class Player extends BaseEntity {
     this.initPlayerCommon()
     this.initDestroyable()
     this.initVariables(data)
+    this.setBadgeColor(this.badgeColor)
     this.setTeam(data.team)
     this.initVisionLight()
 
@@ -288,7 +289,9 @@ class Player extends BaseEntity {
     if (!team) return
 
     let sameTeam = this.getTeam() === team
-    if (team.isAdmin(this.game.player) && sameTeam) {
+    let canChangeRoles = team.isAdmin(this.game.player) ||
+                         (this.game.player.getRolePermissions()["ChangeRoles"] && !this.game.teamMenu.isMe(this))
+    if (canChangeRoles && sameTeam) {
       actions += permissionSelect
     }
 
@@ -427,6 +430,7 @@ class Player extends BaseEntity {
     this.level = data.level
     this.health = data.health
     this.name = data.name
+    this.badgeColor = data.badgeColor || 'ffffff'
 
     this.clientJoinTime = Date.now()
   }
@@ -1001,8 +1005,16 @@ class Player extends BaseEntity {
       align: 'center',
       spriteContainer: container
     })
+    this.setBadgeColor(this.badgeColor)
 
     return container
+  }
+
+  setBadgeColor(color) {
+    this.badgeColor = color || 'ffffff'
+    if (this.usernameText && this.usernameText.sprite) {
+      this.usernameText.sprite.tint = Number('0x' + this.badgeColor)
+    }
   }
 
   getCollisionGroup() {
@@ -1542,9 +1554,25 @@ class Player extends BaseEntity {
 
     const building = new buildingKlass(this.game, data)
     this.building  = building
+
+    const colorPicker = this.game.colorPickerMenu
+    const buildingType = building.getType()
+    if (buildingType === Protocol.definition().BuildingType.Floor) {
+      colorPicker.colorIndex = colorPicker.floorColorIndex
+    } else if (buildingType === Protocol.definition().BuildingType.Wall) {
+      colorPicker.colorIndex = colorPicker.wallColorIndex
+    } else if (buildingType === Protocol.definition().BuildingType.LowWall) {
+      colorPicker.colorIndex = colorPicker.wallColorIndex
+    } else if (buildingType === Protocol.definition().BuildingType.Window) {
+      colorPicker.colorIndex = colorPicker.wallColorIndex
+    } else if (buildingType === Protocol.definition().BuildingType.ArmoredWindow) {
+      colorPicker.colorIndex = colorPicker.wallColorIndex
+    }
+
     this.building.onBuildStart()
 
     this.game.colorPickerMenu.applyBuildingTint(building)
+    this.game.colorPickerMenu.applyBuildingTexture(building)
 
     building.renderAtMousePosition(position.x, position.y)
   }
@@ -1638,8 +1666,8 @@ class Player extends BaseEntity {
       x: gridCoord.x,
       y: gridCoord.y,
       containerId: buildContainer.id,
-      colorIndex: this.building.colorIndex,
-      textureIndex: this.building.textureIndex
+      colorIndex: Number(this.building.colorIndex),
+      textureIndex: Number(this.building.textureIndex)
     }
 
     if (this.building.customHex) {

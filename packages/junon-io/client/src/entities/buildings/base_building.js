@@ -24,6 +24,10 @@ const { toNumber } = require("lodash")
 
 let attributeHandlers = {}
 
+// Fire hurts every burning building a little each second. In a big fire that would be thousands of
+// health bars, floating numbers and red flashes per second, so fire ticks skip them.
+const FIRE_TICK_DAMAGE = 1 // damage this size or smaller on a burning building counts as a fire tick
+
 class BaseBuilding extends BaseEntity {
   static build(game, data) {
     return new this(game, data)
@@ -116,6 +120,10 @@ class BaseBuilding extends BaseEntity {
 
   isEquipment() {
     return false
+  }
+
+  onPostEquip() {
+
   }
 
   getStorageCount() {
@@ -550,8 +558,8 @@ class BaseBuilding extends BaseEntity {
 
 
     if (this.hasCategory("editable_permissions")) {
-      let canManagePermissions = this.belongToOwner(this.game.player) &&
-                                 this.game.player.isAdmin()
+      let canManagePermissions = this.isOwnedBy(this.game.player) &&
+                                this.game.player.getRolePermissions()["ChangeRoles"]
 
       if (!canManagePermissions) {
         el += this.getPermissionStat()
@@ -559,7 +567,7 @@ class BaseBuilding extends BaseEntity {
     }
 
     if (this.hasCategory("spawnpoint") && this.content) {
-      let canManageSpawn = this.belongToOwner(this.game.player) && this.game.player.isAdmin()
+      let canManageSpawn = this.belongToOwner(this.game.player) && this.game.player.getRolePermissions()["ChangeRoles"]
       if (!canManageSpawn) {
         el += this.getSpawnPointStat()
       }
@@ -803,11 +811,14 @@ class BaseBuilding extends BaseEntity {
 
   isChunkable() {
     if (this.data.isEquipDisplay) return false
+    if (this.isEquipment()) return false
 
-    if (this.getContainer().isMovable()) return false
+    let container = this.getContainer()
+    if (!container) return false
+    if (container.isMovable()) return false
 
     let chunkableGroups = ["platforms", "distributions", "armors"]
-    return !this.isEquipment() && chunkableGroups.indexOf(this.getGroup()) !== -1
+    return chunkableGroups.indexOf(this.getGroup()) !== -1
   }
 
   updateChunkSprite() {
@@ -1416,6 +1427,22 @@ class BaseBuilding extends BaseEntity {
     return "collisionGroup.Building"
   }
 
+  getInteractDistance() {
+    const buildingType = Protocol.definition().BuildingType
+    const type = this.getType()
+
+    if (type === buildingType.Stove ||
+        type === buildingType.ButcherTable) {
+      return Constants.tileSize * 2
+    }
+
+    if (type === buildingType.Bed) {
+      return Constants.tileSize
+    }
+
+    return Constants.tileSize * 10
+  }
+
   getType() {
     throw new Error("must implement BaseBuilding.getType")
   }
@@ -1775,8 +1802,30 @@ class BaseBuilding extends BaseEntity {
     let shouldIgnoreDynamic = true
     let entity = this.sector.pick(this.getRow(), this.getCol(), null, shouldIgnoreDynamic)
     if (entity && entity.isBuildingType()) {
+      // something else is still on this tile: clear this one's color, then redraw
+      // whatever buildings remain in the area so the map shows what is underneath
+      this.game.mapMenu.unassignStructure(this)
+      this.redrawRemainingStructuresOnMap()
     } else {
       this.game.mapMenu.unassignStructure(this)
+    }
+  }
+
+  redrawRemainingStructuresOnMap() {
+    const widthInTiles = Math.ceil(this.getRotatedWidth() / Constants.tileSize)
+    const heightInTiles = Math.ceil(this.getRotatedHeight() / Constants.tileSize)
+    const upperLeftRow = this.getUpperLeftRow()
+    const upperLeftCol = this.getUpperLeftCol()
+    const seen = []
+
+    for (let r = upperLeftRow; r < upperLeftRow + heightInTiles; r++) {
+      for (let c = upperLeftCol; c < upperLeftCol + widthInTiles; c++) {
+        const other = this.sector.pick(r, c, null, true)
+        if (other && other !== this && other.isBuildingType() && seen.indexOf(other) === -1) {
+          seen.push(other)
+          this.game.mapMenu.assignStructure(other)
+        }
+      }
     }
   }
 
@@ -1926,7 +1975,12 @@ Object.assign(BaseBuilding.prototype, Destroyable.prototype, {
     return this.getStats(this.level).health
   },
   onPostSetHealth() {
-    if (!this.dontShowHealth()) {
+    const lastHealth = this.lastBarHealth
+    this.lastBarHealth = this.health
+    const drop = (typeof lastHealth === "number") ? lastHealth - this.health : 0
+    const isFireTickOnly = this.isOnFire() && drop > 0 && drop <= FIRE_TICK_DAMAGE
+
+    if (!this.dontShowHealth() && !isFireTickOnly) {
       HealthBar.draw(this, { isFixedPosition: true })
     }
 
@@ -1937,6 +1991,8 @@ Object.assign(BaseBuilding.prototype, Destroyable.prototype, {
 
   },
   onHealthReduced(delta) {
+    if (this.isOnFire() && Math.abs(delta) <= FIRE_TICK_DAMAGE) return
+
     if (this.forceShowDamage()) {
       HealthBar.draw(this, { isFixedPosition: true })
     }

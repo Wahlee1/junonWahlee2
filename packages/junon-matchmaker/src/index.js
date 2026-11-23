@@ -33,10 +33,12 @@ const LOG = require('junon-common/logger')
 const queryString = require('querystring')
 const util = require('util')
 const User = require("junon-common/db/user")
+const ModeratorGiveableBadges = require("junon-common/moderator_giveable_badges")
 const SectorModel = require("junon-common/db/sector")
 const Favorite = require("junon-common/db/favorite")
 const IpBan = require("junon-common/db/ip_ban")
 const FriendModel = require("junon-common/db/friend")
+const Analytics = require("./analytics")
 const SectorBan = require("junon-common/db/sector_ban")
 const Sequelize = require("sequelize")
 const sequelize = require("junon-common/db/sequelize")
@@ -321,8 +323,8 @@ class MatchmakerServer {
 
     if (isSSL) {
       app = uws.SSLApp({
-        key_file_name:  "/root/certbot/tls.key",
-        cert_file_name: "/root/certbot/tls.crt"
+        key_file_name:  process.env.TLS_KEY_FILE || "/root/certbot/tls.key",
+        cert_file_name: process.env.TLS_CERT_FILE || "/root/certbot/tls.crt"
       })
     } else {
       app = uws.App()
@@ -358,8 +360,7 @@ class MatchmakerServer {
 
     let modIds = [
       "5t1H4HSXgGRzCw0isgiwxBf2cXn2", 
-      "jEleFj7LAVhfv8FwLEKejEj6ESx2",
-      "UBdPAUeJBfZfUycLhl3508aAgVH2"
+      "jEleFj7LAVhfv8FwLEKejEj6ESx2"
     ]
 
     if (modIds.indexOf(uid) !== -1) {
@@ -600,7 +601,7 @@ class MatchmakerServer {
             res.end(JSON.stringify(data));
             return
           }
-
+//here
           let isMod = await this.isMod(body.idToken) 
           if (!isMod) {
             let data = {error: "Invalid credentials." }
@@ -609,8 +610,14 @@ class MatchmakerServer {
           }
 
           if(!body.username) {
-            let data = { error: "Missing username of event winner."}
+            let data = { error: "Missing username."}
             res.end(JSON.stringify(data))
+            return
+          }
+
+          let badge = ModeratorGiveableBadges.find((entry) => entry.id === body.badgeId)
+          if (!badge) {
+            res.end(JSON.stringify({error: "Invalid badge."}))
             return
           }
 
@@ -624,20 +631,17 @@ class MatchmakerServer {
             return;
           }
 
-          if(!user.badges) {
-            user.badges = "ev"
-            res.end(JSON.stringify({success: body.username + " was given event badge."}))
-            return
-          }
-          if(user.badges.split(',').indexOf("ev") != -1) {
-            res.end(JSON.stringify({success: body.username + " already has the event badge"}))
+          let userBadges = user.badges ? user.badges.split(',').filter(Boolean) : []
+          if(userBadges.indexOf(badge.id) !== -1) {
+            res.end(JSON.stringify({success: body.username + " already has the " + badge.name + " badge."}))
             return
           }
 
-          user.badges += ",ev"
-          user.save();
+          userBadges.push(badge.id)
+          user.badges = userBadges.join(',')
+          await user.save()
 
-          res.end(JSON.stringify({success: body.username + " was given the event badge."}))
+          res.end(JSON.stringify({success: body.username + " was given the " + badge.name + " badge."}))
         }
         catch(e) {
           ExceptionReporter.captureException(e)
@@ -865,7 +869,7 @@ class MatchmakerServer {
     let uid = await this.getUidFromRequest(data.idToken, data.uid)
     let sectorData = environment.getActivePlayerCreatedGame(ip, uid)
     if (sectorData) {
-      LOG.info("removePlayerFromPreviousCreatedGame: ip: " + ip + " idToken: " + data.idToken + " @ sector: " + sectorData.sectorId + " host: " + sectorData.host)
+      LOG.info("removePlayerFromPreviousCreatedGame: ip: " + ip + " @ sector: " + sectorData.sectorId + " host: " + sectorData.host)
       let gameServerSocket = this.gameServerSockets[sectorData.host]
       if (gameServerSocket) {
         if (!data.stress) {
@@ -963,10 +967,13 @@ class MatchmakerServer {
       let gameServerSocket = this.gameServerSockets[server.host]
       let sectorId
 
-      if (data.isTutorial || global.isOffline) {
+      if (!data.isTutorial) {
+        uid = await this.getUidFromRequest(data.idToken, data.uid)
+      }
+
+      if (data.isTutorial || (global.isOffline && !uid)) {
         sectorId = base64id.generateId()
       } else {
-        uid = await this.getUidFromRequest(data.idToken, data.uid)
         let sectorData = {}
 
         if (data.name) {
@@ -1006,7 +1013,7 @@ class MatchmakerServer {
 
       if (uid) {
         if (uid === "jEleFj7LAVhfv8FwLEKejEj6ESx2" ||
-            uid === "8LuO6XRih2dRNfvtjaS2TwnLWzm1") {
+            uid === "5t1H4HSXgGRzCw0isgiwxBf2cXn2") {
           maxRowCount = 256
           maxColCount = 256
         }
@@ -1275,6 +1282,7 @@ class MatchmakerServer {
 
       let environment = this.getEnvironment()
       await this.removePlayerFromPreviousCreatedGame(environment, ip, data)
+      LOG.info("Join request: player " + (data.username || "unknown") + " -> world " + sectorId)
 
       // check if sector is already online, can't have two instances (save file overwrite each other..)
       let onlineSector = region.getExistingSector(sectorId)
@@ -1432,10 +1440,19 @@ class MatchmakerServer {
       let json = JSON.parse(message)
       let data = json.data
 
+      const trackNames = { Visit: "visit", NewColony: "new_colony", BootSector: "boot_sector", JoinMiniGame: "join_minigame", LoginStarted: "login_started", LoginCompleted: "login_completed", SignInCancelled: "sign_in_cancelled", SignInFailed: "sign_in_failed" }
+      if (Object.prototype.hasOwnProperty.call(trackNames, json.event) && data) Analytics.track(trackNames[json.event], data)
+
       switch (json.event) {
         // ping
         case "1":
           this.onPing(data, socket)
+          break
+        case "Visit":
+        case "LoginStarted":
+        case "LoginCompleted":
+        case "SignInCancelled":
+        case "SignInFailed":
           break
         case "Online":
           this.onPlayerOnline(data, socket)
@@ -1451,6 +1468,9 @@ class MatchmakerServer {
           break
         case "MatchFilter":
           this.onMatchFilter(data, socket)
+          break
+        case "SetCurrentSector":
+          socket.sectorId = data && data.sectorId ? data.sectorId : null
           break
         case "RequestSectorList":
           this.rateLimit("onRequestSectorList", socket, () => {

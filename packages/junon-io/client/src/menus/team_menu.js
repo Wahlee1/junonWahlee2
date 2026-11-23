@@ -77,6 +77,8 @@ class TeamMenu extends BaseMenu {
 
     this.el.querySelector("#enable_chat").addEventListener("click", this.onEnableChatClick.bind(this), true)
     this.el.querySelector("#disable_chat").addEventListener("click", this.onDisableChatClick.bind(this), true)
+    this.el.querySelector("#enable_global_chat").addEventListener("click", this.onEnableGlobalChatClick.bind(this), true)
+    this.el.querySelector("#disable_global_chat").addEventListener("click", this.onDisableGlobalChatClick.bind(this), true)
 
     this.el.querySelector("#enable_infinite_ammo").addEventListener("click", this.onEnableInfiniteAmmoClick.bind(this), true)
     this.el.querySelector("#disable_infinite_ammo").addEventListener("click", this.onDisableInfiniteAmmoClick.bind(this), true)
@@ -240,6 +242,15 @@ class TeamMenu extends BaseMenu {
           this.el.querySelector("#enable_chat").checked = true
         } else {
           this.el.querySelector("#disable_chat").checked = true
+        }
+      }
+
+      if (name === 'isGlobalChatEnabled') {
+        let value = settings[name]
+        if (value) {
+          this.el.querySelector("#enable_global_chat").checked = true
+        } else {
+          this.el.querySelector("#disable_global_chat").checked = true
         }
       }
 
@@ -617,6 +628,32 @@ class TeamMenu extends BaseMenu {
         action: 'editSetting',
         sectorId: this.game.sector.uid,
         key: 'isChatEnabled',
+        value: 'false'
+      })
+    }
+  }
+
+  onEnableGlobalChatClick(e) {
+    e.preventDefault()
+
+    if (e.target.value === 'yes') {
+      SocketUtil.emit("SectorAction", {
+        action: 'editSetting',
+        sectorId: this.game.sector.uid,
+        key: 'isGlobalChatEnabled',
+        value: 'true'
+      })
+    }
+  }
+
+  onDisableGlobalChatClick(e) {
+    e.preventDefault()
+
+    if (e.target.value === 'no') {
+      SocketUtil.emit("SectorAction", {
+        action: 'editSetting',
+        sectorId: this.game.sector.uid,
+        key: 'isGlobalChatEnabled',
         value: 'false'
       })
     }
@@ -1631,7 +1668,7 @@ class TeamMenu extends BaseMenu {
     e.stopPropagation()
     e.preventDefault()
 
-    if (!this.activeTeam.isLeader(this.game.player)) {
+    if (!this.activeTeam.isLeader(this.game.player) && !this.game.player.isSectorOwner()) {
       this.game.displayError("Permission Denied", { warning: true })
       return
     }
@@ -1651,7 +1688,13 @@ class TeamMenu extends BaseMenu {
         message: "Warning! This permission can potentially allow anyone with this role to do anything to your world. Proceed?",
         proceedCallback: this.editRole.bind(this, permission, isEnabled)
       })
-  } else {
+    } else if (permission === "DeconstructOwnedStructures" && isEnabled) {
+      this.game.confirmMenu.open({
+        dontCloseMenus: true,
+        message: "Warning! This permission will allow anyone with this role to deconstruct any safes, keypad doors, sealed doors, vending machines, dispensers, and suit stations in your world, even ones they did not place. Proceed?",
+        proceedCallback: this.editRole.bind(this, permission, isEnabled)
+      })
+    } else {
       this.editRole(permission, isEnabled)
     }
 
@@ -1689,7 +1732,7 @@ class TeamMenu extends BaseMenu {
     this.activeRoleId = roleId
     let result = ""
 
-    if (parseInt(roleId) <= 3 || !this.game.player.isLeader()) {
+    if (parseInt(roleId) <= 3 || !(this.game.player.isLeader() || this.game.player.isSectorOwner())) {
       this.el.querySelector(".role_name_label").style.display = 'block'
       this.el.querySelector(".role_name_edit").style.display = 'none'
       this.el.querySelector(".delete_role_btn").style.display = 'none'
@@ -1766,7 +1809,7 @@ class TeamMenu extends BaseMenu {
     this.renderPrivacy(team)
     this.renderMembers(team)
 
-    if (team.isLeader(this.game.player)) {
+    if (team.isLeader(this.game.player) || this.game.player.isSectorOwner()) {
       this.el.querySelector(".new_role_btn").style.display = 'inline-block'
     } else {
       this.el.querySelector(".new_role_btn").style.display = 'none'
@@ -1926,7 +1969,7 @@ class TeamMenu extends BaseMenu {
     this.el.querySelector(".member_list").innerHTML = this.createMemberListHTML(playerList)
     if (!this.activeTeam) return
 
-    if (this.activeTeam.isAdmin(this.game.player)) {
+    if (game.player.getRolePermissions()["ChangeRoles"]) {
       let offlinePlayerList = Object.values(team.offlineMembers)
       if (offlinePlayerList.length > 0) {
         this.el.querySelector(".offline_member_list").innerHTML = this.createMemberListHTML(offlinePlayerList, { offline: true })
@@ -1934,8 +1977,13 @@ class TeamMenu extends BaseMenu {
       } else {
         this.el.querySelector(".offline_member_list").innerHTML = ""
         this.el.querySelector(".offline_member_list_container").style.display = 'none'
-      }
+      }}
+    else {
+      this.el.querySelector(".offline_member_list").innerHTML = ""
+      this.el.querySelector(".offline_member_list_container").style.display = 'none'
+    }
 
+    if (game.player.isSectorOwner() || game.player.getRolePermissions()["Ban"]) {
       let sectorBanList = Object.values(this.game.sector.sectorBans)
       if (sectorBanList.length > 0) {
         this.el.querySelector(".ban_member_list").innerHTML = this.createBanListHTML(sectorBanList)
@@ -1944,11 +1992,7 @@ class TeamMenu extends BaseMenu {
         this.el.querySelector(".ban_member_list").innerHTML = ""
         this.el.querySelector(".ban_member_list_container").style.display = 'none'
       }
-
     } else {
-      this.el.querySelector(".offline_member_list").innerHTML = ""
-      this.el.querySelector(".offline_member_list_container").style.display = 'none'
-
       this.el.querySelector(".ban_member_list").innerHTML = ""
       this.el.querySelector(".ban_member_list_container").style.display = 'none'
     }
@@ -2015,7 +2059,10 @@ class TeamMenu extends BaseMenu {
     let isTeamCreator = this.activeTeam.isCreator(this.game.player)
     if (isTeamCreator) return true
 
-    return this.activeTeam.isAdmin(this.game.player) &&
+    let canChangeRoles = this.activeTeam.isAdmin(this.game.player) ||
+                         this.game.player.getRolePermissions()["ChangeRoles"]
+
+    return canChangeRoles &&
            !this.activeTeam.isLeader(member) &&
            !this.activeTeam.isCreator(member) &&
            !this.isMe(member)

@@ -294,9 +294,15 @@ class RemoteEventHandler {
     } else if (data.action === 'unban') {
       player.getTeam().unban(data.banId, player)
     } else if (data.action === 'role') {
-      if (!player.isAdmin()) {
-        if (!player.isSectorOwner()) return
-      }
+      const canManageAnyTeam = player.isAdmin() || player.isSectorOwner()
+      const canChangeRoles = player.getRole() &&
+        player.getRole().isAllowedTo("ChangeRoles")
+      if (!canManageAnyTeam && !canChangeRoles) return
+
+      if (targetPlayer && !canManageAnyTeam && targetPlayer.getTeam() !== player.getTeam()) return
+      if (targetPlayer && !canManageAnyTeam &&
+          String(targetPlayer.getId()) === String(player.getId())) return
+
       if (team) {
         team.setRole(data.memberId, data.roleType, player)
       } else {
@@ -340,7 +346,10 @@ class RemoteEventHandler {
     if (data.hasOwnProperty("content") &&
         building.hasEditableContent()) {
       if (building.hasCategory("sign")) {
-        if (player.getRole().isAllowedTo("EditSign")) {
+        let canEdit = building.isCustomAccess
+          ? building.isRolePermitted(player.roleType)
+          : player.getRole().isAllowedTo("EditSign")
+        if (canEdit) {
           let maxLength = building.getMaxContentLength()
           let content = data.content.slice(0, maxLength)
           content = player.replaceBadWords(content)
@@ -366,6 +375,13 @@ class RemoteEventHandler {
           player.showError("Permission Denied", { isWarning: true })
         }
 
+      } else if (building.constructor.name === "RailStop") {
+        if (player.hasMemberPrivilege() || player.getRole().isAllowedTo("ChangeRoles")) {
+          let maxLength = building.getMaxContentLength()
+          building.setBuildingContent(data.content.slice(0, maxLength), player)
+        } else {
+          player.showError("Permission Denied", { isWarning: true })
+        }
       } else {
         if (player.hasMemberPrivilege()) {
           let maxLength = building.getMaxContentLength()
@@ -377,7 +393,7 @@ class RemoteEventHandler {
     }
     if (data.hasOwnProperty("roleType") &&
         building.hasCategory("editable_permissions") &&
-        player.isAdmin()) {
+        player.getRole().isAllowedTo("ChangeRoles")) {
       building.editPermission(data.roleType, data.isRoleEnabled)
       player.setLastCustomAccess(building)
     }
@@ -419,6 +435,7 @@ class RemoteEventHandler {
       if (!item.hasInstance()) return
       let isSpaceSuit = item.type == Protocol.definition().BuildingType.SpaceSuit
       if (isSpaceSuit && data.hasOwnProperty("colorIndex")) {
+        if (item.instance !== player.getArmorEquipment()) return
         if (player.sector.shouldAllowSuitChanged()) {
           let colorLabel = player.game.getSuitColorByIndex(data.colorIndex)
           item.instance.setContent(colorLabel)
@@ -438,7 +455,10 @@ class RemoteEventHandler {
     let team = player.game.teams[data.teamId]
     if (!team) return
     if (!team.hasMember(player)) return
-    if (!player.isAdmin()) return
+    if (!player.isSectorOwner() && !team.isLeader(player)) {
+      player.showError("Only the team leader or server owner can create or edit roles", { isWarning: true })
+      return
+    }
     if (!data.hasOwnProperty("roleId")) {
       if (team.isMaxRoleCountReached()) {
         player.showError("Max Roles Reached")
@@ -574,8 +594,7 @@ class RemoteEventHandler {
   onGetDoorStatus(player, data, socket) {
     let entity = player.game.getEntity(data.id)
 
-    if(!entity) return
-    if(!entity.type === 269) return
+    if (!entity || typeof entity.getStatus !== "function") return
 
     this.getSocketUtil().emit(socket, "DoorStatus", {status: entity.getStatus(player)})
     
@@ -583,14 +602,15 @@ class RemoteEventHandler {
   onKeypadAction(player, data, socket) {
     let entity = player.game.getEntity(data.id)
 
-    if(!entity) return
-    if(!entity.type == 269) return
+    if (!entity) return
 
     switch(data.action) {
       case "setCode":
+        if (typeof entity.setKeypadCode !== "function") return
         entity.setKeypadCode(player, data)
         break
       case "checkCode":
+        if (typeof entity.checkKeypadCode !== "function") return
         entity.checkKeypadCode(player, data)
         break
       default:
@@ -669,9 +689,33 @@ class RemoteEventHandler {
     }
     player.restartCharacter()
   }
+  onCommandSoundFinished(player, data, socket) {
+    if (!player || !player.game || !player.game.commandSoundInstances) return
+
+    const id = String(data.commandSoundId)
+    const instance = player.game.commandSoundInstances.get(id)
+    if (!instance || !instance.pendingSocketIds || !instance.pendingSocketIds.has(socket.id)) return
+
+    instance.pendingSocketIds.delete(socket.id)
+    if (instance.pendingSocketIds.size === 0) {
+      if (instance.timeout) clearTimeout(instance.timeout)
+      player.game.commandSoundInstances.delete(id)
+    }
+  }
+
   onClientDisconnect(socket) {
     const player = this.getPlayerForSocket(socket)
     if (player) {
+      const instances = player.game.commandSoundInstances
+      if (instances) {
+        for (const [id, instance] of instances) {
+          if (instance.pendingSocketIds) instance.pendingSocketIds.delete(socket.id)
+          if (instance.pendingSocketIds && instance.pendingSocketIds.size === 0) {
+            if (instance.timeout) clearTimeout(instance.timeout)
+            instances.delete(id)
+          }
+        }
+      }
       let duration = player.getSessionDuration()
       LOG.info(player.name + " disconnected. session duration: " + Helper.stringifyTimeShort(duration))
       player.resetControls()

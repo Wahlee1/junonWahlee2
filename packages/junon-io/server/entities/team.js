@@ -117,7 +117,7 @@ class Team extends BaseTransientEntity {
   }
 
   isMaxRoleCountReached() {
-    return this.getRoleCount() >= 20
+    return this.getRoleCount() >= 1000
   }
 
   getRoleCount() {
@@ -149,7 +149,20 @@ class Team extends BaseTransientEntity {
       Ban: false,
       UseCommands: false,
       EditCommandBlocks: false,
-      EditTeamName: false
+      EditTeamName: false,
+      DeconstructOwnedStructures: false,
+      ChangeRoles: false
+    })
+  }
+
+  createAdminRole() {
+    let role = new Role({ id: 2, name: "Admin", team: this })
+    role.allowAll()
+    role.setPermissions({
+      Kick: false,
+      Ban: false,
+      UseCommands: false,
+      EditCommandBlocks: false,
     })
   }
 
@@ -167,17 +180,6 @@ class Team extends BaseTransientEntity {
 
     let role = new Role(options)
     role.onRoleChanged()
-  }
-
-  createAdminRole() {
-    let role = new Role({ id: 2, name: "Admin", team: this })
-    role.allowAll()
-    role.setPermissions({
-      Kick: false,
-      Ban: false,
-      UseCommands: false,
-      EditCommandBlocks: false,
-    })
   }
 
   applyData(data) {
@@ -834,6 +836,11 @@ class Team extends BaseTransientEntity {
   }
 
   setRole(memberId, roleType, user) {
+    if (!this.getRole(roleType)) {
+      user.showError("Invalid role", { isWarning: true })
+      return
+    }
+
     if (this.game.isPvP()) {
       // disallow guest role
       if (roleType === Team.GuestRoleType) {
@@ -843,6 +850,26 @@ class Team extends BaseTransientEntity {
 
     let offlineMember = this.offlineMembers[memberId]
     let onlineMember = this.members[memberId]
+
+    let targetMember = offlineMember || onlineMember
+    if (targetMember && targetMember.uid === this.game.creatorUid) {
+      user.showError("Cannot change server owner role", { isWarning: true })
+      return
+    }
+
+    if (!user.isSectorOwner() && !this.isLeader(user)) {
+      let targetRole = onlineMember ? onlineMember.getRole() : (offlineMember && this.getRole(offlineMember.roleType))
+      if (targetRole && targetRole.isAllowedTo("ChangeRoles")) {
+        user.showError("Only the server owner can change this player's role", { isWarning: true })
+        return
+      }
+
+      let newRole = this.getRole(roleType)
+      if (newRole && newRole.isAllowedTo("ChangeRoles")) {
+        user.showError("Only the server owner can give roles with Change Roles", { isWarning: true })
+        return
+      }
+    }
 
     if (offlineMember) {
       if (offlineMember.uid === this.creatorUid) return
@@ -1056,7 +1083,7 @@ class Team extends BaseTransientEntity {
         break
       }
 
-      if (member.isAdmin()) {
+      if (member.getRole() && member.getRole().isAllowedTo("ChangeRoles")) {
         result = true
         break
       }
@@ -1318,7 +1345,7 @@ class Team extends BaseTransientEntity {
   getRequiredTaxAmount() {
     let paymentAmount = 100 * Math.ceil(this.dayCount / 3)
     paymentAmount = Math.max(0, paymentAmount)
-    paymentAmount = Math.min(5000, paymentAmount)
+    paymentAmount = Math.min(100000, paymentAmount)
     return paymentAmount
   }
 

@@ -12,7 +12,7 @@
   "holdItemIndex": 9999,
   "chunkRowCount": 16,
   "chunkColCount": 16,
-  "fovViewDistance": 384,
+  "fovViewDistance": 1536,
   "maxStorageCount": 48,
   "maxColonyScreenshots": 2,
   "interactDistance": 128,
@@ -473,7 +473,9 @@
          "entityId": "id of user who dragged",
          "player": "username of player",
          "corpseType": "type of corpse",
-         "corpseId": "id of corpse"
+         "corpseId": "id of corpse",
+         "previousRow": "row where the corpse was before it was dragged",
+         "previousCol": "column where the corpse was before it was dragged"
       }
     },
     "CorpseReleased": {
@@ -1568,9 +1570,9 @@
       "parent": "Mobs.BaseMob",
       "stats": {
         "speed": 5,
-        "reload": 2000,
-        "health": 150,
-        "damage": 15,
+        "reload": 1000,
+        "health": 250,
+        "damage": 40,
         "range": 64,
         "los": 256
       },
@@ -1764,7 +1766,7 @@
         "reload": 500,
         "health": 50,
         "damage": 20,
-        "range": 512,
+        "range": 256,
         "los": 718
       },
       "isArmored": true,
@@ -1792,9 +1794,9 @@
       "height": 96,
       "stats": {
         "speed": 4,
-        "reload": 250,
+        "reload": 1000,
         "health": 1500,
-        "damage": 25,
+        "damage": 15,
         "range": 512,
         "los": 1024
       },
@@ -4128,7 +4130,8 @@
       },
       "stats": {
         "range": 64,
-        "damage": 2
+        "damage": 2,
+        "reload": 250
       },
       "requirements": {
         "IronBar": 25
@@ -4331,8 +4334,12 @@
       "categories": {"melee_damage": true},
       "sprite": {
         "position": {
-          "x": 53,
-          "y": -8
+          "x": 50,
+          "y": 0
+        },
+        "scale": {
+          "x": 1.15,
+          "y": 1
         },
         "anchor": 0,
         "rotation": 90
@@ -5433,6 +5440,7 @@
         "health": 50,
         "count": 100
       },
+      "isAirtight": true,
       "upgrade": {
         "health": "+100",
         "count": "+25"
@@ -5455,6 +5463,7 @@
         "health": 150,
         "count": 100
       },
+      "isAirtight": true,
       "upgrade": {
         "health": "+100",
         "count": "+25"
@@ -5682,7 +5691,7 @@
         "gold": 200
       },
       "isPassable": true,
-      "categories": {"sign": true},
+      "categories": {"sign": true, "editable_permissions":true},
       "hasMenu": true,
       "hasEditableContent": true,
       "isInteractable": true,
@@ -5706,7 +5715,7 @@
         "gold": 200
       },
       "isPassable": true,
-      "categories": {"sign": true, "switch":true,"lamp":true},
+      "categories": {"sign": true, "switch":true,"lamp":true, "editable_permissions":true},
       "hasMenu": true,
       "hasEditableContent": true,
       "isInteractable": true,
@@ -5968,6 +5977,33 @@
         "count": "+25"
       },
       "description": "Only opens if you have the code"
+    },
+    "Safe": {
+      "hasMenu": true,
+      "width": 32,
+      "height": 32,
+      "cost": {
+        "gold": 250
+      },
+      "requirements": {
+        "IronBar": 30,
+        "Meteorite": 5,
+        "CircuitBoard": 5,
+        "Wire": 5
+      },
+      "categories": {"storage":true},
+      "isInteractable": true,
+      "showInteractTooltip": true,
+      "storageCount": 8,
+      "stats": {
+        "health": 1000,
+        "count": 125
+      },
+      "upgrade": {
+        "health": "+25",
+        "count": "+25"
+      },
+      "description": "A keypad-protected storage crate"
     },
     "SolarPanel": {
       "width": 64,
@@ -6317,7 +6353,7 @@
       "sprite": {
         "rotation": 90
       },
-      "categories": {"seller":true,"vending_machine":true,"editable_permissions":true},
+      "categories": {"seller":true,"vending_machine":true,"editable_permissions":false},
       "hasMenu": true,
       "menuDescription": "",
       "isInteractable": true,
@@ -6347,7 +6383,7 @@
       "sprite": {
         "rotation": 90
       },
-      "categories": {"seller":true,"vending_machine":true,"editable_permissions":true},
+      "categories": {"seller":true,"vending_machine":true,"editable_permissions":false},
       "hasMenu": true,
       "menuDescription": "",
       "isInteractable": true,
@@ -6374,7 +6410,7 @@
       "cost": {
         "gold": 500
       },
-      "categories": {"seller":true,"vending_machine":true,"editable_permissions":true},
+      "categories": {"seller":true,"vending_machine":true,"editable_permissions":false},
       "hasMenu": true,
       "menuDescription": "",
       "isInteractable": true,
@@ -6542,10 +6578,10 @@
       "categories": {"door":true,"melee_resistant":true},
       "minimapColor": "#3bceaa",
       "requirements": {
-        "IronBar": 5
+        "IronBar": 10
       },
       "cost": {
-        "gold": 50
+        "gold": 100
       },
       "stats": {
         "health": 200,
@@ -6947,16 +6983,16 @@
       "height": 32,
       "categories": {"rail":true,"rail_track":true,"instant_build":true},
       "isPassable": true,
-      "isFlamable": false,
+      "isFlamable": true,
       "minimapColor": "#483d8b",
       "cost": {
         "gold": 50
       },
       "requirements": {
-        "IronBar": 5
+        "IronBar": 2
       },
       "stats": {
-        "health": 250,
+        "health": 200,
         "count": 125
       },
       "upgrade": {
@@ -7225,7 +7261,7 @@
         "health": "+25",
         "count": "+1"
       },
-      "description": "Restores player stamina. Also a respawn point"
+      "description": "Restores player stamina. Faster with no suit"
     },
     "FlamethrowerTurret": {
       "width": 64,

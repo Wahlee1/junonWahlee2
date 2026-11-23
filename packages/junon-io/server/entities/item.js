@@ -17,7 +17,7 @@ class InvalidBuildingTypeError extends Error {}
 
 class Item extends BaseTransientEntity {
   constructor(owner, typeIdOrName, options = {}) {
-    super(owner.game)
+    super(owner.game, options.id)
 
     this.options = options
 
@@ -90,7 +90,7 @@ class Item extends BaseTransientEntity {
   }
 
   getMaxStack() {
-    if (this.isGold()) return 100000
+    //if (this.isGold()) return 100000
 
     return Constants.maxStackCount
   }

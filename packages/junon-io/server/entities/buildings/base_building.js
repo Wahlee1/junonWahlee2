@@ -203,6 +203,8 @@ class BaseBuilding extends BaseEntity {
     }
 
     this.content = data.content
+    if (data.lastEditBy) this.lastEditBy = data.lastEditBy
+    if (data.lastEditAt) this.lastEditAt = data.lastEditAt
     this.usage = data.usage
 
     if (data.health) {
@@ -228,7 +230,7 @@ class BaseBuilding extends BaseEntity {
       this.setOwner(owner)
     }
 
-    if (data.accessType) {
+    if (data.hasOwnProperty("accessType")) {
       this.accessType = data.accessType
     } else {
       this.accessType = this.getDefaultAccessType()
@@ -354,6 +356,10 @@ class BaseBuilding extends BaseEntity {
       result += (1 << Team.SlaveRoleType)
       return result
     }
+  }
+
+  shouldInheritCustomAccess() {
+    return true
   }
 
   editTargetType(targetType, isEnabled) {
@@ -1453,7 +1459,7 @@ class BaseBuilding extends BaseEntity {
   }
 
   addGroundToNetwork(room, wasEdgeTile) {
-    if (!this.hasCategory('platform')) return false
+    if (!(this.hasCategory('platform') || this.hasCategory('trap'))) return false
 
     let row = this.getRow()
     let col = this.getCol()
@@ -1488,7 +1494,7 @@ class BaseBuilding extends BaseEntity {
   }
 
   isRemovedPlatformRoomConnector() {
-    if (!this.hasCategory('platform')) return false
+    if (!(this.hasCategory('platform') || this.hasCategory('trap'))) return false
 
     let hit = this.container.groundMap.get(this.getRow(), this.getCol())
     return !hit
@@ -2063,6 +2069,7 @@ Object.assign(BaseBuilding.prototype, Destroyable.prototype, {
     this.game.triggerEvent("BuildingDestroyed", data)
   },
   onHealthReduced(delta) {
+    if (this.isFireTick) return // fire ticks don't flash the map (burning buildings stay red there instead)
     if (!this.getOwner()) return
     if (this.getOwner().isTeam()) {
       this.getOwner().forEachMember((member) => {

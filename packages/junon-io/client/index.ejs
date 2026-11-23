@@ -2,6 +2,7 @@
 <html lang="<%= language %>">
 <head>
     <meta charset="UTF-8" />
+    <meta name="google-adsense-account" content="ca-pub-8308975986969297" />
     <title>Junon.io | Space Colony Survival </title>
 
     <meta name="description" content="Multiplayer Space Colony Survival - Inspired by Space Station 13 and Rimworld. Playable right in your browser!" />
@@ -124,6 +125,14 @@
                     [   `$getStructureByCoords`,
                         `$row, $col`,
                         `Returns the id of a structure based on the row and col specified. Ex. /chat @a the id of the building at 2, 2 is $getStructureByCoords(2,2)`,
+                    ],
+                    [   `$getDirt`,
+                        `$row, $col`,
+                        `The dirt level (0 to 4) of the floor at the row and col specified. Returns 0 if the floor is clean or there is no floor. Ex. /chat @a the dirt at 2, 2 is $getDirt(2,2)`,
+                    ],
+                    [   `$getBlood`,
+                        `$row, $col`,
+                        `The blood level (0 to 4) of the floor at the row and col specified. Returns 0 if there is no blood or no floor. Ex. /chat @a the blood at 2, 2 is $getBlood(2,2)`,
                     ],
                     [   `$getPlatformByCoords`,
                         `$row, $col`,
@@ -258,6 +267,10 @@
                         `$player`,
                         `The id of current equip player is holding. Ex. /stat $getEquipId($player) damage:250`,
                     ],
+                    [   `$getSuitColor`,
+                        `$player`,
+                        `The color of the space suit player is wearing. Returns undefined if the player has no suit or a suit that can't be colored. Ex. /chat @a $getSuitColor($player)`,
+                    ],
                     [   `$getEquipCount`,
                         `$player`,
                         `count of equipped item. Ex. /sethealth $player $getEquipCount(kuroro)`,
@@ -303,6 +316,18 @@
                     [   `$getRemovedValue`,
                         `index, valueToRemove, value`,
                         `Returns the value after the valueToRemove is removed at the given index occurence from the value. $getRemovedValue(2,abc,abcdefg_abcdefg) = abcdefg_defg`,
+                    ],
+                    [   `$getWordCount`,
+                        `value`,
+                        `Returns the number of words (pieces of text separated by spaces) in the value. Ex. $getWordCount(the cat sat down) = 4`,
+                    ],
+                    [   `$getValueCount`,
+                        `valueToCount, value`,
+                        `Returns how many times the valueToCount appears in the value. Ex. $getValueCount(abc,abcxabcxabc) = 3`,
+                    ],
+                    [   `$getLowercase`,
+                        `value`,
+                        `Returns the value with all letters in lowercase. Ex. $getLowercase(Hello WORLD) = hello world`,
                     ],
                 ],
                 Mathematical_Operations: [

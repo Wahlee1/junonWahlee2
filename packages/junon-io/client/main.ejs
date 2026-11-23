@@ -18,6 +18,10 @@
         <a href="/privacy.html" target="_blank" id='privacy_link'><%= t('Privacy') %></a>
         <a href="/rules.html" target="_blank" id='rules_link'><%= t('Rules') %></a>
         <a href="/credits.html" target="_blank" id='credits_link'><%= t('Credits') %></a>
+        <br>
+        <a class='discord_link' href="https://discord.gg/T6rPXtw" target="_blank" rel="noopener noreferrer" aria-label="Join our Discord">
+            <img src="/assets/images/background/discord_small_icon.png" alt="" />
+        </a>
     </div>
     <div id='username_form_container' class='modal_menu'>
         <div id='username_form_description'>Choose a username</div>
@@ -50,20 +54,20 @@
                 <% let changeLog = changeLogs[0] %>
                 <div>
                     <p class='date'><%= changeLog.date %></p>
-                    <% if (changeLog.content.bugs.length > 0) { %>
+                    <% let bugs = changeLog.content && Array.isArray(changeLog.content.bugs) ? changeLog.content.bugs.slice(0,1) : [] %>
+                    <% if (bugs.length > 0) { %>
                         <ul>
-                            <% changeLog.content.bugs = changeLog.content.bugs.slice(0,1) %>
-                            <% for (let i = 0; i < changeLog.content.bugs.length; i++) { %>
-                                <% let bug = changeLog.content.bugs[i] %>
+                            <% for (let i = 0; i < bugs.length; i++) { %>
+                                <% let bug = bugs[i] %>
                                 <li><%= bug %></li>                    
                             <% } %>
                         </ul>
                     <% } %>
-                    <% if (changeLog.content.features.length > 0) { %>
+                    <% let features = changeLog.content && Array.isArray(changeLog.content.features) ? changeLog.content.features.slice(0,2) : [] %>
+                    <% if (features.length > 0) { %>
                         <ul>
-                            <% changeLog.content.features = changeLog.content.features.slice(0,2) %>
-                            <% for (let i = 0; i < changeLog.content.features.length; i++) { %>
-                                <% let feature = changeLog.content.features[i] %>
+                            <% for (let i = 0; i < features.length; i++) { %>
+                                <% let feature = features[i] %>
                                 <li><%= feature %></li>                    
                             <% } %>
                         </ul>
@@ -97,34 +101,35 @@
     <div class='middle_container'>
         <div class='home_user_action_container'>
             <div class='home_action_row'>
-                <div class='default_play_btn btn'>
-                    <span><%= t('New Game') %></span>
-                    <div class="play_spinner lds-ring"><div></div><div></div><div></div><div></div></div>
+                <div id='language_selector'>
+                        <img src="/assets/images/language_icon.png" class="language_icon" />
+
+                    <select id='language_select'>
+                        <option value='en'>English</option>
+                        <option value='ru'>Русский</option>
+                        <option value='ja'>日本語</option>
+                    </select>
                 </div>
 
-                <div class='tutorial_menu_btn btn'>
-                    <span><%= t('Tutorial') %></span>
-                    <div class="play_spinner lds-ring"><div></div><div></div><div></div><div></div></div>
+                <div class='home_primary_actions'>
+                    <div class='default_play_btn btn'>
+                        <span><%= t('New Game') %></span>
+                        <div class="play_spinner lds-ring"><div></div><div></div><div></div><div></div></div>
+                    </div>
+                    <div class='tutorial_menu_btn btn'>
+                        <span><%= t('Tutorial') %></span>
+                        <div class="play_spinner lds-ring"><div></div><div></div><div></div><div></div></div>
+                    </div>
                 </div>
 
                 <div class='settings_menu_btn btn'>
+                    <span>Settings</span>
                     <img src="/assets/images/settings_icon.png" />
                 </div>
             </div>
 
-            <div id='language_selector'>
-                <img src="/assets/images/language_icon.png" class='language_icon' />
-                <select id='language_select'>
-                    <option value='en'>English</option>
-                    <option value='ru'>Русский</option>
-                    <option value='ja'>日本語</option>
-                </select>
-            </div>
-
-            <a class='discord_link' href="https://discord.gg/T6rPXtw" target="_blank"><img src="/assets/images/background/discord_small_icon.png"></a>
-
             <button class='open_ban_list_btn ui_btn'>Manage Bans</button>
-            <button class="open_event_badges_btn ui_btn" style="display:none;margin-top: 20px;background-color: #bf5036; font-family: 'cc'">Give player event badge</button>
+            <button class="open_event_badges_btn ui_btn" style="display:none;margin-top: 20px;background-color: #bf5036; font-family: 'cc'">Give badge</button>
 
         </div>
 
@@ -180,12 +185,6 @@
         </div>
     </div>
 
-    <div id='desktop_transition_section'>
-        <div id='desktop_transition_notice'>
-            Starting October 25, Junon.io will be desktop only and focused on single-player. Multiplayer will be co-op only: invite friends with a room code.
-            The Windows desktop version is available now: <a href="https://simpleyuji.itch.io/junonio" target="_blank" rel="noopener noreferrer">Download Junon.io on itch.io</a>.
-        </div>
-    </div>
     
     <div id='background'></div>
 
@@ -204,11 +203,13 @@
 
     <div id="event_manager_container" class="modal_menu">
         <div class="cancel_btn"></div>
-        <div class="menu_main_header">Event badge manager</div>
+        <div class="menu_main_header">Give badge</div>
         <div class="add_badge_form">
             <p>Username</p>
             <input type="text" id="badge_username_field">
-            <button id="badge_submit">Add event badge</button>
+            <p>Badge</p>
+            <select id="badge_select" required></select>
+            <button id="badge_submit">Give badge</button>
         </div>
 
         <p id="event_badge_menu_info"></p>
@@ -661,6 +662,7 @@
         <div id='server_memory'><span>server memory </span><span class='value'></span></div>
         <div id='upstream'><span>upstream </span><span class='value'></span></div>
         <div id='ping'><span>ping </span><span class='value'></span></div>
+        <div id='fps'><span>fps </span><span class='value'></span></div>
     </div>
 
     <div id="leaderboard_menu">
@@ -686,12 +688,12 @@
                 <span class='chat_tab_label'><%= t('Local') %></span>
                 <span class='chat_unread_count'></span>
             </div>
-            <div class='team_chat_tab chat_tab' data-chat='team'>
-                <span class='chat_tab_label'>Team</span>
-                <span class='chat_unread_count'></span>
-            </div>
             <div class='global_chat_tab chat_tab' data-chat='global'>
                 <span class='chat_tab_label'>Global</span>
+                <span class='chat_unread_count'></span>
+            </div>
+            <div class='team_chat_tab chat_tab' data-chat='team'>
+                <span class='chat_tab_label'>Team</span>
                 <span class='chat_unread_count'></span>
             </div>
         </div>
@@ -1542,6 +1544,15 @@
                             <label for='enable_chat'><%= t('Yes') %></label>
                             <input type="radio" id="disable_chat" name='is_chat_enabled' value='no'>
                             <label for='disable_chat'><%= t('No') %></label>
+                        </div>
+                    </div>
+                    <div class='colony_info_entry colony_global_chat_allowed'>
+                        <label><%= t('Enable Global Chat') %></label>
+                        <div class='colony_info_entry_radio_container'>
+                            <input type="radio" id="enable_global_chat" name='is_global_chat_enabled' value='yes'>
+                            <label for='enable_global_chat'><%= t('Yes') %></label>
+                            <input type="radio" id="disable_global_chat" name='is_global_chat_enabled' value='no'>
+                            <label for='disable_global_chat'><%= t('No') %></label>
                         </div>
                     </div>
                     <div class='colony_info_entry is_infinite_ammo'>

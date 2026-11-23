@@ -6,14 +6,19 @@ const ClientHelper = require("../util/client_helper")
 
 class ColorPickerMenu extends BaseMenu {
   onMenuConstructed() {
+    this.floorColorIndex = Constants.FloorColors.white_1.index
+    this.wallColorIndex = Constants.FloorColors.gray_5.index
+    this.colorIndex = this.floorColorIndex
     this.el.querySelector(".picker_color_value").innerText = "white_1"
     this.colors = {}
 
     this.customColorActive = false
     this.customColorHex = "#000000" //it'll always open as #000000 unless we implement a custom color value in a new save file revision, which would be an unnecessary headache.
 
+    this.textureIndex = Constants.FloorTextures.cornered_texture.index
+
     if (this.el.querySelector(".picker_texture_value")) {
-      this.el.querySelector(".picker_texture_value").innerText = "solid_texture"
+      this.el.querySelector(".picker_texture_value").innerText = "cornered_texture"
     }
   }
 
@@ -61,10 +66,22 @@ class ColorPickerMenu extends BaseMenu {
   }
 
   applyBuildingTint(building) {
-    let floorWallTypes = [Protocol.definition().BuildingType.Floor, Protocol.definition().BuildingType.Wall]
-    let isFloorOrWall = floorWallTypes.indexOf(building.getType()) !== -1
-    if (isFloorOrWall) {
+    const buildingType = building.getType()
+    const isFloor = buildingType === Protocol.definition().BuildingType.Floor
+    const wallTypes = [
+      Protocol.definition().BuildingType.Wall,
+      Protocol.definition().BuildingType.LowWall,
+      Protocol.definition().BuildingType.Window,
+      Protocol.definition().BuildingType.ArmoredWindow
+    ]
+    if (isFloor || wallTypes.indexOf(buildingType) !== -1) {
       if (this.colorIndex) {
+        if (isFloor) {
+          this.floorColorIndex = Number(this.colorIndex)
+        } else {
+          this.wallColorIndex = Number(this.colorIndex)
+        }
+
         building.setColorIndex(this.colorIndex)
         let value = this.game.colors[this.colorIndex].value
         building.baseSprite.tint = value

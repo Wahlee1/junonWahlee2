@@ -246,9 +246,7 @@ class Game {
   executeCommand(caller, message, delay = 0) {
     message = message.substr(1) // remove / character
 
-    // remove spaces inside brackets
-    // https://stackoverflow.com/a/16644618
-    message = message.replace(/\s+(?=[^[\]]*\])/g, "")
+    message = message.replace(/\[([^\]]*)\]/g, (match, selector) => `[${selector.replace(/\s+/g, '')}]`)
     const tokens = message.split(/\s+/)
     const commandName = tokens.shift()
     const args = tokens.filter((token) => { return token.length > 0 })
@@ -2401,7 +2399,7 @@ async setGameMode(gameMode) {
       sector: player.sector,
       inventory: player.inventory,
       equipIndex: player.equipIndex,
-      players: player.sector.players,
+      players: player.sector.isFovMode() && !player.shouldSkipFov() ? player.visiblePlayers : player.sector.players,
       teams: this.getVisibleTeams(),
       gold: player.gold,
       oxygen: player.getOxygen(),
@@ -2706,6 +2704,7 @@ async setGameMode(gameMode) {
       occupancy: this.sector.getOccupancyPercentage(),
       screenshots: this.sector.screenshots,
       gameMode: this.getGameMode(),
+      isGlobalChatEnabled: this.sector.settings.isGlobalChatEnabled,
       isPrivate: this.sector.isPrivate,
       maxPlayers: this.getMaxPlayers(),
       language: this.language

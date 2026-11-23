@@ -3,6 +3,7 @@ const Protocol = require('../../../common/util/protocol')
 const BaseBuilding = require("./base_building")
 const Airlock = require("./airlock")
 const Team = require("../team")
+const KeypadAccess = require("./keypad_access")
 
 class KeypadDoor extends Airlock {
     onBuildingPlaced() {
@@ -33,11 +34,16 @@ class KeypadDoor extends Airlock {
         //wait for keypad usage instead
     }
 
+    isPassableByPathFinder() {
+        return false
+    }
+
     canBeSalvagedBy(player) {
-        if (player.isSectorOwner()) {
+        const role = player.getRole()
+        if (role && role.isAllowedTo("DeconstructOwnedStructures") || player.isSectorOwner()) {
             return super.canBeSalvagedBy(player)
         } else {
-            player.showError("Wait for the map owner to break this door",  {isWarning: true})
+            player.showError("You dont have permission to deconstruct this door", {isWarning: true})
             return false
         }
     }
@@ -58,57 +64,24 @@ class KeypadDoor extends Airlock {
     }
 
     setKeypadCode(player, data) {
-        if(player.isAdmin() || player.isSectorOwner()) {
-            if(this.sector.keyCodes[data.id]) return
-            if(typeof data.keyCode != 'string') return
-            if(data.keyCode.length > 10) return
-
-            this.keyCode = data.keyCode
-
-            player.showError("Code successfully set to " + data.keyCode)
-            this.getSocketUtil().emit(player.getSocket(), "KeypadSuccessful", {})
-            this.getSocketUtil().emit(player.getSocket(), "DoorStatus", {status: 'check code'})
-
-            this.sector.keyCodes[data.id] = { keyCode: data.keyCode }
-        } else {
-            player.showError("Must be admin", {isWarning: true})
-        }
+        KeypadAccess.setKeypadCode.call(this, player, data)
     }
 
     checkKeypadCode(player, data) {
-        if(!data || !data.keyCode) return
+        if (!KeypadAccess.isKeypadCodeValid.call(this, player, data)) return
 
+        if(this.isOpen) this.close()
+        else this.open()
 
-        let keyCode = this.sector.keyCodes[data.id]
+        this.getSocketUtil().emit(player.getSocket(), "KeypadSuccessful", {})
 
-        if(!keyCode) {
-            player.showError("Code not set")
-            return
-        }
-
-
-        if(data.keyCode === keyCode.keyCode) {
-            if(this.isOpen) this.close()
-
-            else this.open()
-
-            this.getSocketUtil().emit(player.getSocket(), "KeypadSuccessful", {})
-
-            setTimeout(() => {
-                this.close()
-            }, 3000)
-        } else {
-            this.getSocketUtil().emit(player.getSocket(), "KeypadUnsuccessful", {})
-        }
+        setTimeout(() => {
+            this.close()
+        }, 3000)
     }
 
     getStatus(player) {
-        if(this.sector.keyCodes[this.id]) {
-            return "check code"
-        }
-        else {
-            return "set code"
-        }
+        return KeypadAccess.getStatus.call(this, player)
     }
 }
 

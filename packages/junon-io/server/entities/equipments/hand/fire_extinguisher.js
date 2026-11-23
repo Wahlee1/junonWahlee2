@@ -11,8 +11,8 @@ class FireExtinguisher extends HandEquipment {
 
     let distance = Constants.tileSize
 
-    let firstPoint  = player.game.pointFromDistance(player.getX(), player.getY(), distance * 1, player.getRadAngle())
-    let secondPoint = player.game.pointFromDistance(player.getX(), player.getY(), distance * 2, player.getRadAngle())
+    let firstPoint  = player.game.pointFromDistance(player.getX(), player.getY(), distance * 2.75, player.getRadAngle())
+    let secondPoint = player.game.pointFromDistance(player.getX(), player.getY(), distance * 3.75, player.getRadAngle())
     // let thirdPoint  = player.game.pointFromDistance(player.getX(), player.getY(), distance * 4, player.getRadAngle())
 
     let points = [firstPoint, secondPoint]
@@ -23,7 +23,7 @@ class FireExtinguisher extends HandEquipment {
     points.forEach((point) => {
       const randomWidth = Math.floor(Math.random() * (maxWidth - minWidth)) + minWidth
 
-      if (!this.isObstructed(player, point)) {
+      //if (!this.isObstructed(player, point)) {
         Projectiles.CarbonGas.build({
           weapon: this,
           source:      { x: point[0], y: point[1] },
@@ -31,7 +31,7 @@ class FireExtinguisher extends HandEquipment {
           w: randomWidth,
           h: randomWidth
         })
-      }
+      //}
     })
 
   }

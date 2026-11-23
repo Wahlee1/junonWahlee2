@@ -389,6 +389,7 @@ initSettings(entities) {
     isHungerEnabled: true,
     isOxygenEnabled: true,
     isChatEnabled: true,
+    isGlobalChatEnabled: true,
     isInfiniteAmmo: false,
     isInfinitePower: false,
     isCorpseEnabled: true,
@@ -685,10 +686,19 @@ initSettings(entities) {
 
   setCustomEntityStat(id, stats) {
     this.entityCustomStats[id] = stats
+
+    const broadcastStats = Object.assign({}, stats)
+    const minZoom = broadcastStats.minZoom
+    const maxZoom = broadcastStats.maxZoom
+    delete broadcastStats.minZoom
+    delete broadcastStats.maxZoom
+
     this.getSocketUtil().broadcast(this.game.getSocketIds(), "CustomStats", {
       group: "entities",
       type: id,
-      stats: stats
+      stats: broadcastStats,
+      minZoom: Number.isFinite(minZoom) ? minZoom : 0,
+      maxZoom: Number.isFinite(maxZoom) ? maxZoom : 0
     })
   }
 
@@ -821,6 +831,10 @@ initSettings(entities) {
         settings: this.settings
       })
 
+      if (key === "isGlobalChatEnabled") {
+        this.game.sendSectorInfoToMatchmaker()
+      }
+
       if (key === "isSpectateAllowed") {
         if (value === false) {
           this.game.forEachPlayer((player) => {
@@ -836,7 +850,7 @@ initSettings(entities) {
   canEditSetting(key) {
     if(this.gameMode === 'hardcore' || !this.gameMode) return false;
     if(this.gameMode === 'survival') {
-      let allowedSettingChanges = ['isPvPAllowed',"isFovMode", "isZoomAllowed", "showMiniMap", "showPlayerList", "isChatEnabled", "isPlayerSavingEnabled", "isGravityEnabled", "isSpectateAllowed"]
+      let allowedSettingChanges = ['isPvPAllowed',"isFovMode", "isZoomAllowed", "showMiniMap", "showPlayerList", "isChatEnabled", "isGlobalChatEnabled", "isPlayerSavingEnabled", "isGravityEnabled", "isSpectateAllowed"]
 
       if(allowedSettingChanges.indexOf(key) === -1) return false;
     }
@@ -854,6 +868,42 @@ initSettings(entities) {
       if (!this.settings['isBloodEnabled']) {
         this.removeAllBlood()
       }
+    } else if (key === 'isFovMode' && value === false) {
+      this.forEachPlayer((player) => {
+        let chunkSubscriptions = player.getChunkSubscriptions()
+        for (let chunkId in chunkSubscriptions) {
+          chunkSubscriptions[chunkId].sendAllToClient(player)
+        }
+      })
+    } else if (key === 'isFovMode' && value === true) {
+      this.forEachPlayer((player) => {
+        if (player.shouldSkipFov()) return
+
+        player.assignFov()
+
+        let chunkSubscriptions = player.getChunkSubscriptions()
+        for (let chunkId in chunkSubscriptions) {
+          let chunk = chunkSubscriptions[chunkId]
+
+          this.getPlayersByChunk(chunk).forEach((entity) => {
+            if (entity.getId() !== player.getId() && !player.visiblePlayers[entity.getId()]) {
+              player.addRemovedPlayers(entity)
+            }
+          })
+
+          this.getCorpsesByChunk(chunk).forEach((entity) => {
+            if (!player.visibleCorpses[entity.getId()]) {
+              player.addRemovedCorpses(entity)
+            }
+          })
+
+          this.getMobsByChunk(chunk).forEach((entity) => {
+            if (!player.visibleMobs[entity.getId()]) {
+              player.addRemovedMobs(entity)
+            }
+          })
+        }
+      })
     }
   }
 
@@ -2936,7 +2986,8 @@ initSettings(entities) {
   }
 
   insertEntityToTreeByName(entity, groupName) {
-    if(entity.isRemoved && entity.isRemoved()) return
+    // isRemoved is a plain true/false property on entities, not a method: calling it threw an error for every removed entity
+    if (entity.isRemoved === true || (typeof entity.isRemoved === "function" && entity.isRemoved())) return
     let tree = this.getTreeFromEntityType(groupName, entity.getContainer())
     entity.updateRbushCoords()
     entity.onWorldPostStep()
@@ -3098,7 +3149,7 @@ initSettings(entities) {
       let entity = this.flames[entityId]
       if(!entity.effects.fire || entity.isRemoved) {
         delete this.flames[entityId]
-        return;
+        continue;
       } 
       this.safeGrowFire(entity)
     }

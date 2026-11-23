@@ -66,6 +66,10 @@ class Game {
   initPersistentVariables() {
     this.armorTextures = {}
     this.loadedSounds = {}
+    this.loadingSounds = {}
+    this.commandSounds = {}
+    this.pendingCommandSoundIds = new Set()
+    this.cancelledCommandSoundIds = new Set()
   }
 
   addMutedPlayer(name) {
@@ -118,6 +122,7 @@ class Game {
     this.upstreamIntervals = []
     this.maxUpstreamIntervals = []
     this.resolution = 1
+    this.hasServerZoomOverride = false
     this.latencyCalculateIntervalInSeconds = 10
     this.ticksSincePacket = 0
     this.isServerShutdownInProgress = false
@@ -381,20 +386,22 @@ class Game {
   initDraggables() {
     const containers = Array.from(document.querySelectorAll(".storage, #game_canvas"))
 
-    const dragDelay = 150
-
     const draggable = new Draggable(containers, {
       draggable: '.inventory_slot',
-      delay: dragDelay,
+      delay: { mouse: 0, touch: 150 },
+      distance: 5,
       placedTimeout: 100
-    })
-
-    const canvasContainer = new Draggable(document.querySelector("#game_canvas"), {
-      draggable: '.player_inventory_slot',
     })
 
     draggable.on('drag:start', (event) => {
       this.isDragging = true
+      this.destinationIndex = null
+      this.destinationStorageId = null
+
+      const buildingTooltip = document.querySelector("#building_menu_tooltip")
+      if (buildingTooltip) {
+        buildingTooltip.style.display = "none"
+      }
     })
 
     draggable.on('drag:over:container', (event) => {
@@ -416,10 +423,27 @@ class Game {
     draggable.on('drag:stop', (event) => {
       this.isDragging = false
 
+      const dropTarget = event.data.sensorEvent && event.data.sensorEvent.target
+      if (dropTarget) {
+        const destinationSlot = dropTarget.closest(".inventory_slot")
+        const destinationStorage = destinationSlot && destinationSlot.closest(".storage")
+
+        if (destinationStorage && destinationStorage.dataset.storageId) {
+          this.destinationIndex = destinationSlot.dataset.index
+          this.destinationStorageId = destinationStorage.dataset.storageId
+        } else if (dropTarget.closest("#game_canvas")) {
+          this.destinationIndex = null
+          this.destinationStorageId = Constants.worldStorageId
+        } else if (this.destinationStorageId !== Constants.worldStorageId) {
+          this.destinationIndex = null
+          this.destinationStorageId = null
+        }
+      }
+
       const sourceIndex = event.data.source.dataset.index
       const sourceStorageId = event.data.source.closest(".storage").dataset.storageId
 
-      let isPositionChanged = this.destinationIndex && this.destinationIndex !== sourceIndex
+      let isPositionChanged = this.destinationIndex !== null && this.destinationIndex !== sourceIndex
       if (isPositionChanged) {
         event.data.originalSource.classList.add("hidden")
       } else {
@@ -434,12 +458,15 @@ class Game {
           destinationStorageId: this.destinationStorageId
         }
 
-        if (this.destinationIndex) {
+        if (this.destinationIndex !== null) {
           data['destinationIndex'] = this.destinationIndex
         }
 
         SocketUtil.emit("SwapInventory", data)
       }
+
+      this.destinationIndex = null
+      this.destinationStorageId = null
     })
   }
 
@@ -612,7 +639,7 @@ class Game {
     if (isSandboxOwner) return true
 
     return game.player.getRole() &&
-      game.player.getRole().permissions["UseCommands"]
+      game.player.getRolePermissions()["UseCommands"]
   }
 
   hideEntityMenu(entity) {
@@ -802,13 +829,16 @@ class Game {
   }
 
   playSoundLazyDownload(name, options = {}) {
-    if (!this.loadedSounds[name]) {
-      this.loadSound(name, () => {
-        this.playSound(name, options)
-      })
-    } else {
-      this.playSound(name, options)
+    if (this.loadedSounds[name]) {
+      return this.playSound(name, options)
     }
+
+    if (this.loadingSounds[name]) {
+      this.loadingSounds[name].callbacks.push(() => this.playSound(name, options))
+      return
+    }
+
+    this.loadSound(name, () => this.playSound(name, options))
   }
 
   playSound(name, options = {}) {
@@ -874,20 +904,48 @@ class Game {
     }
   }
 
-  loadSound(name, cb) {
-    let sound = new Howl({
-      src: ['/assets/sounds/' + name + '.mp3'],
-      volume: 0.5,
-      onload: () => {
-        this.loadedSounds[name] = true
-        cb()
-      },
-      onend: () => {
-        this.removeCurrentSound(name)
-      }
+  loadSound(name, cb, onError) {
+    let sound = this.sounds[name]
+    let loading = this.loadingSounds[name]
+
+    if (this.loadedSounds[name]) {
+      if (cb) cb()
+      return
+    }
+
+    if (loading) {
+      if (cb) loading.callbacks.push(cb)
+      if (onError) loading.errorCallbacks.push(onError)
+      return
+    }
+
+    if (!sound) {
+      sound = this.createSound(name)
+      this.sounds[name] = sound
+    }
+
+    this.loadingSounds[name] = {
+      callbacks: cb ? [cb] : [],
+      errorCallbacks: onError ? [onError] : []
+    }
+
+    sound.once('load', () => {
+      this.loadedSounds[name] = true
+      let callbacks = this.loadingSounds[name]?.callbacks || []
+      delete this.loadingSounds[name]
+      callbacks.forEach(callback => callback())
     })
 
-    this.sounds[name] = sound
+    sound.once('loaderror', (id, error) => {
+      console.error('Failed to load sound "' + name + '":', error)
+      let errorCallbacks = this.loadingSounds[name]?.errorCallbacks || []
+      delete this.loadingSounds[name]
+      errorCallbacks.forEach(callback => callback(error))
+    })
+
+    if (sound.state() === 'unloaded') {
+      sound.load()
+    }
   }
 
   createSound(name) {
@@ -1424,7 +1482,7 @@ class Game {
         cb()
       })
 
-    let tempAssets = ['armored_window_icon.png', 'armored_window_base.png', 'armored_window.png','window_icon.png', 'window_base.png', 'window.png','circuit_board_printer.png','neon_sign.png', 'small_wood_table.png', 'displacement_map.png', 'squid_lord_heart.png', 'squid_staff.png', 'fries.png', 'energy_drink.png', 'alien_juice.png', 'rocket_launcher.png', 'scar_17_by_px.png', 'bowl_by_px.png', 'potato_soup_by_px.png', 'miso_soup_by_px.png', 'slime_broth_by_px.png', 'bomber_turret_by_px.png', 'firebat.png', 'plasma_blade.png', 'raven.png', 'starberries.png', 'car.png', 'bricks_texture.png', 'checker_texture.png', 'noise_texture.png', 'x_texture.png', 'xchecker_texture.png', 'nihonshu.png', 'pumpkin.png', 'pumpkin_plant.png', 'pumpkin_seed.png', 'rice.png', 'rice_plant.png', 'rice_seed.png', 'fish.png', 'nigiri.png', 'katana_reskin.png', 'pumpkin_pie.png', 'imperial_special_forces_armor.png', 'deconstructor.png', 'blue_laser.png', 'keypad_door.png', 'keypad_door_lower.png', 'keypad_door_upper.png', 'unbreakable_wall.png', 'sapper.png', 'sapper_corpse.png', 'dynamite.png', 'miasma_gate.png', "solid_texture2.png", "simplex_texture.png", "cabbage_seed.png", "cabbage_plant.png", "cabbage.png", "3dwall-0.png", "3dwall-1.png", "3dwall-2.png", "3dwall-3.png", "3dwall-4.png", "3dwall-5.png", "3dwall-6.png", "3dwall-7.png", "3dwall-8.png", "3dwall-9.png", "3dwall-10.png", "3dwall-11.png", "3dwall-12.png", "3dwall-13.png", "shotgun_reskin.png",  "ak47.png", "bolt_action_rifle.png", "minigun.png", "flame_thrower_reskin.png", "grenade_launcher.png", "uzi2.png", "player_hands_hold.png", "player_hands_hold_heavy.png", "player_hands_hold_launcher.png", "small_airlock_upper.png", "small_airlock_lower.png", "small_airlock.png", "heavy_rifle.png", "shock_grenade.png", "bayonet.png", "kukri.png", "blue.png", "revitalizer.png", "revitalizer_base.png", "revitalizer_core.png", "revitalizer_beam.png", "dispenser.png"]
+    let tempAssets = ['safe.png','armored_window_icon.png', 'armored_window_base.png', 'armored_window.png','window_icon.png', 'window_base.png', 'window.png','circuit_board_printer.png','neon_sign.png', 'small_wood_table.png', 'displacement_map.png', 'squid_lord_heart.png', 'squid_staff.png', 'fries.png', 'energy_drink.png', 'alien_juice.png', 'rocket_launcher.png', 'scar_17_by_px.png', 'bowl_by_px.png', 'potato_soup_by_px.png', 'miso_soup_by_px.png', 'slime_broth_by_px.png', 'bomber_turret_by_px.png', 'firebat.png', 'plasma_blade.png', 'raven.png', 'starberries.png', 'car.png', 'bricks_texture.png', 'checker_texture.png', 'noise_texture.png', 'x_texture.png', 'xchecker_texture.png', 'nihonshu.png', 'pumpkin.png', 'pumpkin_plant.png', 'pumpkin_seed.png', 'rice.png', 'rice_plant.png', 'rice_seed.png', 'fish.png', 'nigiri.png', 'katana_reskin.png', 'pumpkin_pie.png', 'imperial_special_forces_armor.png', 'deconstructor.png', 'blue_laser.png', 'keypad_door.png', 'keypad_door_lower.png', 'keypad_door_upper.png', 'unbreakable_wall.png', 'sapper.png', 'sapper_corpse.png', 'dynamite.png', 'miasma_gate.png', "solid_texture2.png", "simplex_texture.png", "cabbage_seed.png", "cabbage_plant.png", "cabbage.png", "3dwall-0.png", "3dwall-1.png", "3dwall-2.png", "3dwall-3.png", "3dwall-4.png", "3dwall-5.png", "3dwall-6.png", "3dwall-7.png", "3dwall-8.png", "3dwall-9.png", "3dwall-10.png", "3dwall-11.png", "3dwall-12.png", "3dwall-13.png", "shotgun_reskin.png",  "ak47.png", "bolt_action_rifle.png", "minigun.png", "flame_thrower_reskin.png", "grenade_launcher.png", "uzi2.png", "player_hands_hold.png", "player_hands_hold_heavy.png", "player_hands_hold_launcher.png", "small_airlock_upper.png", "small_airlock_lower.png", "small_airlock.png", "heavy_rifle.png", "shock_grenade.png", "bayonet.png", "kukri.png", "blue.png", "revitalizer.png", "revitalizer_base.png", "revitalizer_core.png", "revitalizer_beam.png", "dispenser.png"]
     tempAssets.forEach((asset) => {
       console.log(`Loaded ${asset}:`)
       PIXI.Texture.addToCache(PIXI.Texture.fromImage('/assets/images/' + asset), asset)
@@ -1499,6 +1557,7 @@ class Game {
     SocketUtil.on("RepairStarted", this.onRepairStarted.bind(this))
     SocketUtil.on("RenderStorage", this.onRenderStorage.bind(this))
     SocketUtil.on("Teleport", this.onTeleport.bind(this))
+    SocketUtil.on("SetZoom", this.onSetZoom.bind(this))
     SocketUtil.on("ErrorMessage", this.onErrorMessage.bind(this))
     SocketUtil.on("MineralCapacityReached", this.onMineralCapacityReached.bind(this))
     SocketUtil.on("ShowStarMap", this.onShowStarMap.bind(this))
@@ -1545,6 +1604,8 @@ class Game {
     SocketUtil.on("NPCServerMessage", this.onNPCServerMessage.bind(this))
     SocketUtil.on("RailDestinations", this.onRailDestinations.bind(this))
     SocketUtil.on("PlaySound", this.onPlaySound.bind(this))
+    SocketUtil.on("PlayCommandSound", this.onPlayCommandSound.bind(this))
+    SocketUtil.on("StopCommandSound", this.onStopCommandSound.bind(this))
     SocketUtil.on("ScreenshotUpdated", this.onScreenshotUpdated.bind(this))
     SocketUtil.on("AccountBalance", this.onAccountBalance.bind(this))
     SocketUtil.on("FavoriteUpdated", this.onFavoriteUpdated.bind(this))
@@ -1589,8 +1650,8 @@ class Game {
 
   onBadgeEquipped(data) {
     try {
-      let tint = Number("0x" + data.badge.color);
-      this.sector.players[data.playerId].sprite.children[1].children[0].tint = tint;
+      let player = this.sector.players[data.playerId]
+      player.setBadgeColor(data.badge.color)
     }
     catch (e) {
       //server sent this before the player was initialized
@@ -1653,6 +1714,7 @@ class Game {
   }
 
   onKeypadUnsuccessful() {
+    this.keypadMenu.pendingAction = null
     document.querySelector("#keypad_err_msg").style.visibility = 'visible'
     document.querySelector("#keypad_code_value").innerHTML = ''
 
@@ -1662,7 +1724,18 @@ class Game {
   }
 
   onKeypadSuccessful() {
-    game.keypadMenu.close()
+    const keypadMenu = this.keypadMenu
+    const entity = this.sector.getEntity(keypadMenu.doorId)
+    const shouldOpenSafe = keypadMenu.pendingAction === "checkCode" &&
+      entity &&
+      entity.getType() === Protocol.definition().BuildingType.Safe
+
+    keypadMenu.close()
+    keypadMenu.pendingAction = null
+
+    if (shouldOpenSafe) {
+      this.storageMenu.open("Safe", entity)
+    }
   }
 
   onDoorStatus(status) {
@@ -1726,7 +1799,17 @@ class Game {
     } else if (data.group === 'buildings') {
       this.sector.setBuildingCustomStats(data.type, data.stats)
     } else if (data.group === 'entities') {
-      this.sector.setEntityCustomStats(data.type, data.stats)
+      const stats = Object.assign({}, data.stats)
+
+      // Zero means the optional zoom limit was not supplied.
+      if (Number.isFinite(data.minZoom) && data.minZoom > 0) {
+        stats.minZoom = data.minZoom
+      }
+      if (Number.isFinite(data.maxZoom) && data.maxZoom > 0) {
+        stats.maxZoom = data.maxZoom
+      }
+
+      this.sector.setEntityCustomStats(data.type, stats)
     } else if (data.group === 'items') {
       this.sector.setItemCustomStats(data.type, data.stats)
     }
@@ -1926,6 +2009,82 @@ class Game {
     this.railStopMenu.renderDestinations(data)
   }
 
+  onPlayCommandSound(data) {
+    const commandSoundId = String(data.commandSoundId)
+
+    if (this.cancelledCommandSoundIds.has(commandSoundId)) {
+      this.cancelledCommandSoundIds.delete(commandSoundId)
+      return
+    }
+
+    this.pendingCommandSoundIds.add(commandSoundId)
+    const finish = () => {
+      this.pendingCommandSoundIds.delete(commandSoundId)
+      this.cancelledCommandSoundIds.delete(commandSoundId)
+      SocketUtil.emit("CommandSoundFinished", { commandSoundId })
+    }
+
+    const soundName = Helper.camelToSnakeCase(Helper.getSoundNameById(data.id))
+
+    this.loadSound(soundName, () => {
+      if (this.cancelledCommandSoundIds.has(commandSoundId)) {
+        this.cancelledCommandSoundIds.delete(commandSoundId)
+        this.pendingCommandSoundIds.delete(commandSoundId)
+        return
+      }
+
+      const sound = this.sounds[soundName]
+      if (!sound) {
+        finish()
+        return
+      }
+
+      try {
+        const playbackId = sound.play()
+        const active = {
+          soundName,
+          playbackId,
+          onEnd: null
+        }
+        active.onEnd = () => {
+          if (this.commandSounds[commandSoundId] !== active) return
+          delete this.commandSounds[commandSoundId]
+          sound.off("end", active.onEnd, playbackId)
+          finish()
+        }
+        this.commandSounds[commandSoundId] = active
+        sound.on("end", active.onEnd, playbackId)
+      } catch (e) {
+        console.error(e)
+        finish()
+      }
+    }, () => {
+      finish()
+    })
+  }
+
+  onStopCommandSound(data) {
+    const commandSoundId = String(data.commandSoundId)
+    const active = this.commandSounds[commandSoundId]
+
+    if (active) {
+      const sound = this.sounds[active.soundName]
+      if (sound) {
+        try {
+          if (active.onEnd) sound.off("end", active.onEnd, active.playbackId)
+          sound.stop(active.playbackId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      delete this.commandSounds[commandSoundId]
+      this.pendingCommandSoundIds.delete(commandSoundId)
+    } else if (this.pendingCommandSoundIds.has(commandSoundId)) {
+      // The play event arrived, but the sound is still loading.
+      this.cancelledCommandSoundIds.add(commandSoundId)
+    }
+  }
+
   onPlaySound(data) {
     let soundName = Helper.getSoundNameById(data.id)
     let clientSoundName = Helper.camelToSnakeCase(soundName)
@@ -1933,7 +2092,7 @@ class Game {
     if (clientSoundName === "meeting") {
       this.playMeetingMusic()
     } else {
-      this.playSound(clientSoundName)
+      this.playSoundLazyDownload(clientSoundName)
     }
   }
 
@@ -1969,6 +2128,7 @@ class Game {
   }
 
   displayHomePage() {
+    this.sendToMatchmaker({ event: "SetCurrentSector", data: { sectorId: null } })
     this.removeDataFromPreviousGame()
     this.player = null
     this.isActive = false
@@ -2106,6 +2266,7 @@ class Game {
 
     this.teamMenu.updateColonySettings(data.settings)
     this.sector.setSettings(data.settings)
+    this.chatMenu.updateGlobalTabVisibility()
 
     if (data.hasOwnProperty("gameMode")) {
       this.sector.setGameMode(data.gameMode)
@@ -2874,7 +3035,7 @@ class Game {
 
   displayError(msg, options = {}) {
     msg = i18n.t(msg)
-console.log(options)
+
 
     let textContent
     if (options.isTitle) {
@@ -3108,6 +3269,7 @@ console.log(options)
     if (!this.player) return
 
     if (this.sector.isZoomAllowed()) return
+    if (this.hasServerZoomOverride) return
 
     const nativeResolution = {
       width: 1280,
@@ -3191,7 +3353,14 @@ console.log(options)
 
     this.updateServerUpdateRate(this.getScreenWidth(), this.getScreenHeight())
 
-    SocketUtil.emit('WindowResized', { screenWidth: this.getScreenWidth(), screenHeight: this.getScreenHeight(), isZoom: options.zoom })
+    SocketUtil.emit('WindowResized', {
+      screenWidth: this.getScreenWidth(),
+      screenHeight: this.getScreenHeight(),
+      isZoom: options.zoom,
+      zoomLevel: 1 / this.resolution,
+      minZoom: this.MIN_ZOOM_LEVEL,
+      maxZoom: this.MAX_ZOOM_LEVEL
+    })
   }
 
   getScreenWidth() {
@@ -3759,6 +3928,7 @@ arrow.style.setProperty('--arrow-color',realColor)
 
     inventorySlot.dataset.content = data.count === 1 ? "" : data.count
     inventorySlot.dataset.special = data.instance ? data.instance.content : ""
+    inventorySlot.dataset.lastUsedTimestamp = data.lastUsedTimestamp || ""
 
     // show item count in primary action btn
     if (this.isMobile() && inventorySlot.dataset.id === this.mobilePrimaryActionBtn.dataset.id) {
@@ -3783,6 +3953,8 @@ arrow.style.setProperty('--arrow-color',realColor)
     inventorySlot.dataset.id = ""
     inventorySlot.dataset.type = ""
     inventorySlot.dataset.content = ""
+    inventorySlot.dataset.special = ""
+    inventorySlot.dataset.lastUsedTimestamp = ""
 
     this.removeInventorySlotUsage(inventorySlot)
   }
@@ -3935,6 +4107,7 @@ arrow.style.setProperty('--arrow-color',realColor)
 
     this.playerId = data.playerId
     this.initSector(data.sector)
+    this.sendToMatchmaker({ event: "SetCurrentSector", data: { sectorId: data.sector.uid } })
     this.sector.initPlayers(data)
     this.sector.setSettings(data.sector.settings)
 
@@ -4248,6 +4421,7 @@ arrow.style.setProperty('--arrow-color',realColor)
     // if I just Joined (need to cleanup prior)
     this.removeDataFromPreviousGame()
     this.initSector(data.sector)
+    this.sendToMatchmaker({ event: "SetCurrentSector", data: { sectorId: data.sector.uid } })
 
     this.initSidebar(data.sidebar)
 
@@ -4623,6 +4797,10 @@ arrow.style.setProperty('--arrow-color',realColor)
       this.stopHudAlertTween()
       this.stopScreenWarp()
 
+      // zoom limits set by the previous world must not carry over
+      this.initConstants()
+      this.hasServerZoomOverride = false
+
       this.terminalMenu.isChoiceSubmitted = false
       TWEEN.removeAll()
 
@@ -4722,7 +4900,9 @@ arrow.style.setProperty('--arrow-color',realColor)
     this.showPlayerJoinGameMessage(data.player.name)
     if (!this.sector) return
 
-    this.sector.syncWithServerForGroups(["players"], { players: [data.player] })
+    if (!this.sector.isFovMode()) {
+      this.sector.syncWithServerForGroups(["players"], { players: [data.player] })
+    }
     this.sector.addToOriginalPlayers(data.player)
   }
 
@@ -5164,6 +5344,20 @@ arrow.style.setProperty('--arrow-color',realColor)
     this.buildActionMenu.alpha = 0
   }
 
+  onSetZoom(data) {
+    if (Number.isFinite(Number(data.minZoom)) && Number(data.minZoom) > 0) {
+      this.MIN_ZOOM_LEVEL = Math.max(0.1, Math.min(10, Number(data.minZoom)))
+    }
+    if (Number.isFinite(Number(data.maxZoom)) && Number(data.maxZoom) > 0) {
+      this.MAX_ZOOM_LEVEL = Math.max(this.MIN_ZOOM_LEVEL, Math.min(10, Number(data.maxZoom)))
+    }
+
+    // Preserve server-issued zooms against automatic resolution adjustments.
+    this.hasServerZoomOverride = true
+    clearTimeout(this.updateCanvasResolutionTimeout)
+    this.zoom(Number(data.level), true)
+  }
+
   onZoomOutBtnClick() {
     this.zoomOut()
   }
@@ -5207,10 +5401,13 @@ arrow.style.setProperty('--arrow-color',realColor)
     this.zoom(targetZoomLevel)
   }
 
-  zoom(level) {
+  zoom(level, force) {
+    if (!Number.isFinite(level)) return
+    level = Math.max(this.MIN_ZOOM_LEVEL, Math.min(this.MAX_ZOOM_LEVEL, level))
+
     let resolution = { resolution: this.resolution }
 
-    if (!this.sector.isZoomAllowed()) return
+    if (!force && !this.sector.isZoomAllowed()) return
 
     window.zoomEnabled = false // dont allow another zoom until this one is finished
 
@@ -5430,7 +5627,24 @@ arrow.style.setProperty('--arrow-color',realColor)
     this.teamMenu.renderScreenshots(this.sector)
   }
 
+  // frames per second shown in the F5 stats view, refreshed once per second
+  updateFpsCounter() {
+    const now = performance.now()
+    this.fpsFrames = (this.fpsFrames || 0) + 1
+    if (typeof this.fpsLastTime === "undefined") this.fpsLastTime = now
+    if (now - this.fpsLastTime < 1000) return
+
+    const fps = Math.round(this.fpsFrames * 1000 / (now - this.fpsLastTime))
+    this.fpsFrames = 0
+    this.fpsLastTime = now
+
+    if (!this.fpsElement) this.fpsElement = document.querySelector("#fps .value")
+    if (this.fpsElement) this.fpsElement.innerText = fps
+  }
+
   updateGame(time) {
+    this.updateFpsCounter()
+
     if (!this.player) return
 
     this.ticksSincePacket += 1
@@ -5445,6 +5659,10 @@ arrow.style.setProperty('--arrow-color',realColor)
 
     this.applyMyInputs()
     this.sector.executeTurn()
+
+    if (this.craftMenu && typeof this.craftMenu.closeIfOutOfRange === "function") {
+      this.craftMenu.closeIfOutOfRange()
+    }
 
     if (this.player) {
       this.player.executeTurn()
@@ -5678,11 +5896,12 @@ arrow.style.setProperty('--arrow-color',realColor)
     document.querySelector("#player_quick_inventory_menu").style.display = 'none'
   }
 
-  isInputSameAsPrevious(controlKeys, moveAngle, idle, pressedKey) {
+  isInputSameAsPrevious(controlKeys, moveAngle, idle, pressedKey, pressedKeyName) {
     if (this.main.isMobile) {
       return this.lastMoveAngle === moveAngle && this.lastIdle === idle
     } else {
       if (this.lastPressedKey !== pressedKey) return false
+      if (this.lastPressedKeyName !== pressedKeyName) return false
       return this.lastControlKeys === controlKeys
     }
   }
@@ -5702,34 +5921,56 @@ arrow.style.setProperty('--arrow-color',realColor)
     // check what keys are held
     const controlKeys = this.inputController.controlKeys
     const pressedKey = this.inputController.pressedKey
+    const pressedKeyName = this.inputController.pressedKeyName
     const moveAngle = this.inputController.moveAngle
     const idle = this.inputController.idle
 
-    if (player.isMining()) {
-      if (player.canAct()) {
-        player.mine()
-        return
+    const inputChanged = !this.isInputSameAsPrevious(controlKeys, moveAngle, idle, pressedKey, pressedKeyName)
+
+    // Mobile input stays ahead of action handling.
+    if (this.main.isMobile && inputChanged) {
+      SocketUtil.emit("PlayerInput", { angle: moveAngle, idle: idle })
+
+      this.lastPressedKey = pressedKey
+      this.lastPressedKeyName = pressedKeyName
+      this.lastControlKeys = controlKeys
+      this.lastMoveAngle = moveAngle
+      this.lastIdle = idle
+    }
+
+    if (player.isMining() && player.canAct()) {
+      // Mining can return early, so send desktop input before mining.
+      if (!this.main.isMobile && inputChanged) {
+        SocketUtil.emit("PlayerInput", { controlKeys: controlKeys, pressedKey: pressedKey, pressedKeyName: pressedKeyName })
+
+        this.lastPressedKey = pressedKey
+        this.lastPressedKeyName = pressedKeyName
+        this.lastControlKeys = controlKeys
+        this.lastMoveAngle = moveAngle
+        this.lastIdle = idle
       }
-    } else if (this.isPerformingAction(controlKeys)) {
+
+      player.mine()
+      return
+    } else if (!player.isMining() && this.isPerformingAction(controlKeys)) {
+      // Let the server receive Act before the held-action state.
       player.performAction()
     }
 
-    if (this.isInputSameAsPrevious(controlKeys, moveAngle, idle, pressedKey)) return
+    // Send remaining desktop input after action handling.
+    if (!this.main.isMobile && inputChanged) {
+      SocketUtil.emit("PlayerInput", { controlKeys: controlKeys, pressedKey: pressedKey, pressedKeyName: pressedKeyName })
+
+      this.lastPressedKey = pressedKey
+      this.lastPressedKeyName = pressedKeyName
+      this.lastControlKeys = controlKeys
+      this.lastMoveAngle = moveAngle
+      this.lastIdle = idle
+    }
 
     if (this.isPanMode) {
       return this.panViaControl()
     }
-
-    if (this.main.isMobile) {
-      SocketUtil.emit("PlayerInput", { angle: moveAngle, idle: idle })
-    } else {
-      SocketUtil.emit("PlayerInput", { controlKeys: controlKeys, pressedKey: pressedKey })
-    }
-
-    this.lastPressedKey = pressedKey
-    this.lastControlKeys = controlKeys
-    this.lastMoveAngle = moveAngle
-    this.lastIdle = idle
   }
 
   getCoordFromMouse(clientX, clientY) {

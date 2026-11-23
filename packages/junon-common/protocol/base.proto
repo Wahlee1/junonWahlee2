@@ -144,6 +144,9 @@ message MessageWrapper {
     DialogueUpdated DialogueUpdated = 151;
     RoundStarted RoundStarted = 152;
     EndVote EndVote = 153;
+    PlayCommandSound PlayCommandSound = 186;
+    StopCommandSound StopCommandSound = 187;
+    CommandSoundFinished CommandSoundFinished = 188;
     ProgressCircle ProgressCircle = 154;
     StartRound StartRound = 155;
     TeamAssignmentChanged TeamAssignmentChanged = 156;
@@ -176,6 +179,7 @@ message MessageWrapper {
     TriggerPlayerMenu TriggerPlayerMenu = 183;
     RevitalizerActivate RevitalizerActivate = 184;
     VendingPriceChange VendingPriceChange = 185;
+    SetZoom SetZoom = 189;
   }
 }
 
@@ -316,6 +320,8 @@ message CustomStats {
   string group = 1;
   uint32 type = 2;
   map<string, uint32> stats = 3;
+  float minZoom = 4;
+  float maxZoom = 5;
 }
 
 message ButtonUpdated {
@@ -482,6 +488,19 @@ message AccountBalance {
 
 message PlaySound {
   SoundType id = 1;  
+}
+
+message PlayCommandSound {
+  SoundType id = 1;
+  string commandSoundId = 2;
+}
+
+message StopCommandSound {
+  string commandSoundId = 1;
+}
+
+message CommandSoundFinished {
+  string commandSoundId = 1;
 }
 
 message SendMoney {
@@ -1164,6 +1183,9 @@ message Build {
   uint32 w = 5;
   uint32 h = 6;
   uint32 containerId = 7;
+  uint32 colorIndex = 8;
+  uint32 textureIndex = 9;
+  string customHex = 10;
 }
 
 message Upgrade {
@@ -1203,6 +1225,7 @@ message PlayerInput {
   int32 angle = 2;
   bool  idle = 3;
   uint32 pressedKey = 4;
+  string pressedKeyName = 5;
 }
 
 message RequestGame {
@@ -1434,6 +1457,7 @@ message Player {
   bool isAngleLocked = 34;
   bool isHidden = 35;
   uint32 viewDistance = 36;
+  string badgeColor = 37;
 }
 
 message DragTargetRef {
@@ -1589,4 +1613,13 @@ message WindowResized {
   uint32 screenWidth = 1;
   uint32 screenHeight = 2;
   bool isZoom = 3;
+  float zoomLevel = 4;
+  float minZoom = 5;
+  float maxZoom = 6;
+}
+
+message SetZoom {
+  float level = 1;
+  float minZoom = 2;
+  float maxZoom = 3;
 }

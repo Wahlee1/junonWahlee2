@@ -3,6 +3,19 @@ const Constants = require("../../common/constants")
 const Protocol = require('../../common/util/protocol')
 
 class Role extends BaseCommand {
+  canExecute(caller) {
+    if (!caller.isPlayer()) return super.canExecute(caller)
+    if (!this.isEnabled()) return caller.isAdminMode
+    if (caller.isAdminMode || caller.isAdmin()) return true
+    if (this.game.isMiniGame()) return false
+    if (this.isNonSandboxCommand()) return true
+    if (!this.game.isPeaceful()) return false
+    if (caller.isSectorOwner()) return true
+
+    let role = caller.getRole()
+    return !!(role && role.isAllowedTo("ChangeRoles"))
+  }
+
   getUsage() {
     return [
       "Assigns a role to a player",
@@ -43,4 +56,3 @@ class Role extends BaseCommand {
 }
 
 module.exports = Role
-

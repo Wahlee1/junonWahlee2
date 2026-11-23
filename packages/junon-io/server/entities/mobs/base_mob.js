@@ -92,10 +92,21 @@ class BaseMob extends BaseEntity {
     let players = this.sector.playerTree.search(boundingBox)
     for (var i = 0; i < players.length; i++) {
       let player = players[i]
-      if (player.calculateEntityVisible(this)) {
+      if (player.calculateEntityVisible(this) && !player.visibleMobs[this.getId()]) {
         player.addVisibleMob(this)
       }
     }
+  }
+
+  updatePlayerViewerships() {
+    for (let id in this.playerViewerships) {
+      let player = this.playerViewerships[id]
+      if (!player.calculateEntityVisible(this)) {
+        player.removeVisibleMob(this)
+      }
+    }
+
+    this.addNewlyVisibleMobToPlayers()
   }
 
   initBehavior() {
@@ -1998,6 +2009,10 @@ this.setNameColor(data.nameColor)
   onGridPositionChanged() {
     this.trackRegions()
 
+    if (this.sector.isFovMode()) {
+      this.updatePlayerViewerships()
+    }
+
     this.game.triggerEvent("MobMove", {
       entityId: this.getId(),
       entityType: this.getTypeName(),
@@ -2030,16 +2045,24 @@ this.setNameColor(data.nameColor)
     let relativeBox = this.getPaddedRelativeBox()
     const hits = this.getSector().structureMap.hitTestTile(relativeBox)
     hits.forEach((hit) => {
-      if (hit.entity) {
+      if (hit.entity && hit.entity.getType() !== Protocol.definition().BuildingType.MiasmaGate) {
         this.onHitEntity(hit.entity)
+      }
+    })
+
+    this.checkPreciseInteractables()
+  }
+
+  checkPreciseInteractables() {
+    const hits = this.getSector().structureMap.hitTestTile(this.getRelativeBox())
+    hits.forEach((hit) => {
+      if (hit.entity && hit.entity.getType() === Protocol.definition().BuildingType.MiasmaGate) {
+        this.removeEffect('miasma')
       }
     })
   }
 
   onHitEntity(entity) {
-    if(entity.getType() === Protocol.definition().BuildingType.MiasmaGate) {
-      this.removeEffect('miasma')
-    }
   }
 
   onClosedDoorEncountered(door) {

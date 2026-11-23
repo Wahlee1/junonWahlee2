@@ -16,7 +16,7 @@ class EventHandler {
     this.sector = sector
     this.game = sector.game
     this.triggers = {}
-    this.variables = {}
+    this.variables = { variables: "" }
     this.scoreIndexByPlayer = {}
     this.logs = []
     this.commandDelay = 0
@@ -295,6 +295,38 @@ class EventHandler {
     return equipment.getTypeName()
   }
 
+  getSuitColor(playerId) {
+    let player = this.getPlayer(playerId)
+    if (!player) return undefined
+
+    let equipment = player.getArmorEquipment()
+    if (!equipment) return undefined
+
+    // only the normal space suit can be colored
+    if (equipment.getType() !== Protocol.definition().BuildingType.SpaceSuit) return undefined
+
+    // a suit that was never colored has no content yet, and it looks gray
+    return equipment.content || "gray"
+  }
+
+  getDirt(row, col) {
+    return this.getTileEffectLevel(row, col, "dirt")
+  }
+
+  getBlood(row, col) {
+    return this.getTileEffectLevel(row, col, "blood")
+  }
+
+  // blood and dirt can sit on the floor and on the ground tile under it, so report the higher of the two
+  getTileEffectLevel(row, col, effect) {
+    let floor = this.sector.platformMap.get(row, col)
+    let ground = this.sector.groundMap.get(row, col)
+    let floorLevel = floor ? floor.getEffectLevel(effect) : 0
+    let groundLevel = ground ? ground.getEffectLevel(effect) : 0
+
+    return Math.max(floorLevel, groundLevel)
+  }
+
   getPlatformByCoords(row, col) {
     let platform = this.sector.platformMap.get(row, col)
     if(!platform) return ''
@@ -438,6 +470,26 @@ class EventHandler {
     if (!player) return 0
 
     return player.hunger
+  }
+
+  getZoom(playerId) {
+    let player = this.getPlayer(playerId)
+    if (!player) return 0
+    return Number.isFinite(player.zoomLevel) ? player.zoomLevel : 1
+  }
+
+  getMaxZoom(playerId) {
+    let player = this.getPlayer(playerId)
+    if (!player) return 0
+    const stats = this.sector.entityCustomStats[player.id] || {}
+    return stats.maxZoom != null ? stats.maxZoom : (player.maxZoom || 3)
+  }
+
+  getMinZoom(playerId) {
+    let player = this.getPlayer(playerId)
+    if (!player) return 0
+    const stats = this.sector.entityCustomStats[player.id] || {}
+    return stats.minZoom != null ? stats.minZoom : (player.minZoom || 0.5)
   }
 
   getOwner(entityId) {
@@ -686,17 +738,37 @@ class EventHandler {
   }
 
   hasReachedMaxVariableCount() {
-    return Object.keys(this.variables).length >= 10000
+    return Object.keys(this.variables).filter((key) => key !== "variables").length >= 10000
+  }
+
+  updateVariableList() {
+    const reservedNames = new Set([
+      "player", "playerId", "playerRole", "entityId", "entityType",
+      "count", "itemType", "message", "attackingPlayer",
+      "attackingPlayerRole", "attackingMob", "killingPlayer",
+      "killingPlayerRole", "killingMob", "type", "remaining", "team",
+      "region", "previous", "current", "delta", "corpseType", "corpseId",
+      "foodType", "mobType", "seconds", "$storageId", "$storageType",
+      "$itemType", "variables"
+    ])
+
+    this.variables.variables = Object.keys(this.variables)
+      .filter((key) => !reservedNames.has(key))
+      .join(" ")
   }
 
   loadVariables(variables) {
     for (let key in variables) {
+      if (key === "variables") continue
       this.variables[key] = variables[key]
     }
+    this.updateVariableList()
   }
 
   setVariable(key, value) {
+    if (key === "variables") return
     this.variables[key] = value
+    this.updateVariableList()
   }
 
   getVariable(key) {
@@ -708,7 +780,9 @@ class EventHandler {
   }
 
   removeVariable(key) {
+    if (key === "variables") return
     delete this.variables[key]
+    this.updateVariableList()
   }
 
   addTrigger(data) {
@@ -994,8 +1068,8 @@ class EventHandler {
   }
 
   safeEvalComparison(comparison, params) {
-    let safeValue1 = this.interpolate(comparison.value1, params, { dontQuoteString: true })
-    let safeValue2 = this.interpolate(comparison.value2, params, { dontQuoteString: true })
+    let safeValue1 = this.interpolate(comparison.value1, params, { dontQuoteString: true, preserveWhitespace: true })
+    let safeValue2 = this.interpolate(comparison.value2, params, { dontQuoteString: true, preserveWhitespace: true })
     let operator = comparison.operator
     let result
 
@@ -1427,8 +1501,30 @@ class EventHandler {
     if (values.length < 3) return undefined;
     let value = values[1].toString();
     let string = values[2].toString();
-    let startIndex = this.getValuePosition(...values) - 1;
+    let position = this.getValuePosition(...values);
+    if (!(position >= 1)) return string;
+    let startIndex = position - 1;
     return string.slice(0,startIndex) + string.slice(startIndex + value.length);
+  }
+
+  getWordCount(...values) {
+    if (values.length === 0) return 0
+    let string = values.join(" ").toString()
+    let words = string.split(" ").filter((word) => word !== "")
+    return words.length
+  }
+
+  getValueCount(...values) {
+    if (values.length < 2) return 0
+    let value = values[0].toString()
+    let string = values.slice(1).join(",").toString()
+    if (value === "") return 0
+    return string.split(value).length - 1
+  }
+
+  getLowercase(...values) {
+    if (values.length === 0) return ""
+    return values.join(",").toString().toLowerCase()
   }
 
   getDate(...values) {
@@ -1532,6 +1628,9 @@ class EventHandler {
       "$getSpeed": true,
       "$getOxygen": true,
       "$getHunger": true,
+      "$getZoom": true,
+      "$getMaxZoom": true,
+      "$getMinZoom": true,
       "$getMaxHealth": true,
       "$getMaxStamina": true,
       "$getMaxOxygen": true,
@@ -1554,6 +1653,7 @@ class EventHandler {
       "$getEquipCount": true,
       "$getInventoryItemCount": true,
       "$getArmorEquip": true,
+      "$getSuitColor": true,
       "$add": true,
       "$subtract": true,
       "$multiply": true,
@@ -1583,6 +1683,8 @@ class EventHandler {
       "$getHour": true,
       "$getContent": true,
       "$getPlatformByCoords": true,
+      "$getDirt": true,
+      "$getBlood": true,
       "$getStructureByCoords": true,
       "$hasEffect": true,
       "$getTotalMobCount": true,
@@ -1602,6 +1704,9 @@ class EventHandler {
       "$getValueLength": true,
       "$getPushedValue": true,
       "$getRemovedValue": true,
+      "$getWordCount": true,
+      "$getValueCount": true,
+      "$getLowercase": true,
       "$getDate": true,
       "$getEntityDistance": true,
     }
@@ -1684,7 +1789,7 @@ cleanArgument(...args) {
 }
 
   interpolate(value, params, options = {}) {
-    let result = value.trim()
+    let result = options.preserveWhitespace ? value : value.trim()
 
     let parameters = Object.assign({}, params, this.variables)
 

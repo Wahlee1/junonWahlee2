@@ -62,6 +62,14 @@ class BaseSeed extends BaseBuilding {
     return "distributions"
   }
 
+  isEquipment() {
+    return this.data.user
+  }
+
+  onPostEquip() {
+    this.sprite.visible = false
+  }
+
 
   setIsHarvestable(isHarvestable) {
     this.isHarvestable = isHarvestable
@@ -92,6 +100,9 @@ class BaseSeed extends BaseBuilding {
 
   remove() {
     super.remove()
+
+    // a seed held in a mob's hand was never planted: no container, no tile to restore
+    if (this.isEquipment() || !this.getContainer()) return
 
     let platform = this.getStandingPlatform()
     if (!platform) return

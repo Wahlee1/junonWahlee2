@@ -88,9 +88,9 @@ class Corpse extends BaseEntity {
     return mobKlass.prototype.getMaxHealth()
   }
 
-  resurrect(mobName) {
+  resurrect(mobName, owner = this.owner, name = this.name) {
     let mobType = mobName || Helper.getMobNameById(this.type)
-    let data = { x: this.x, y: this.y, type: mobType, health: 1, name: this.name, owner: this.owner, isRevived: true, resurrectCount: this.resurrectCount + 1 }
+    let data = { x: this.x, y: this.y, type: mobType, health: 1, name, owner, isRevived: true, resurrectCount: this.resurrectCount + 1 }
     let mobs = this.sector.spawnMob(data)
     this.remove()
 
@@ -372,8 +372,20 @@ class Corpse extends BaseEntity {
       this.getSocketUtil().broadcast(this.sector.getSocketIds(), "ChunkPositionChanged", { row: options.chunkRow, col: options.chunkCol, entityId: this.getId() })
     }
 
-
+    this.checkPreciseInteractables()
     this.onStateChanged()
+  }
+
+  checkPreciseInteractables() {
+    if (!this.getContainer().isSector()) return
+
+    let relativeBox = this.getRelativeBox()
+    const hits = this.getContainer().structureMap.hitTestTile(relativeBox)
+    hits.forEach((hit) => {
+      if (hit.entity && hit.entity.getType() === Protocol.definition().BuildingType.MiasmaGate) {
+        this.removeEffect('miasma')
+      }
+    })
   }
 
   getStandingPlatform() {
@@ -383,6 +395,14 @@ class Corpse extends BaseEntity {
   repositionOnUnitTree() {
     this.getSector().removeEntityFromTreeByName(this, "units")
     this.getSector().insertEntityToTreeByName(this, "units")
+  }
+
+  onEffectRemoved(effect) {
+    if (effect === "fire") {
+      this.burnCounter = 0
+    }
+
+    BaseEntity.prototype.onEffectRemoved.call(this, effect)
   }
 
   applyFireDamage() {
@@ -420,6 +440,10 @@ Object.assign(Corpse.prototype, ShipMountable.prototype, {
 
 
 Object.assign(Corpse.prototype, Destroyable.prototype, {
+  isDestroyed() {
+    return false
+  },
+
   getMaxHealth() {
     return 1
   }

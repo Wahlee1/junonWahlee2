@@ -373,6 +373,23 @@ class Main {
     this.sessionId = uuidv4()
   }
 
+  getAnonId() {
+    try {
+      let id = window.localStorage.getItem("junon_anon_id")
+      if (!/^[0-9a-f-]{36}$/.test(id || "")) {
+        id = uuidv4()
+        window.localStorage.setItem("junon_anon_id", id)
+      }
+      return id
+    } catch(e) {
+      return null
+    }
+  }
+
+  trackLogin(eventName) {
+    this.sendToMatchmaker({ event: eventName, data: {} })
+  }
+
   initFingerPrint(cb) {
     FingerprintJS.load().then(fp => {
       fp.get().then(result => {
@@ -725,7 +742,7 @@ class Main {
     if (debugMode) {
       return `http://localhost:8001/assets/screenshots/${key}_thumb.jpg`
     } else {
-      return `https://junon.nyc3.cdn.digitaloceanspaces.com/screenshots/${key}_thumb.jpg`
+      return `https://junon-io.nyc3.digitaloceanspaces.com/screenshots/${key}_thumb.jpg`
     }
   }
 
@@ -943,6 +960,7 @@ class Main {
   initAnalytics() {
     // google analytics
     const trackingId = Config[env].googleAnalyticsId
+    if (!trackingId) { window.gtag = function(){}; return } // analytics off: keep gtag() calls harmless
 
     document.write('<script async src="https://www.googletagmanager.com/gtag/js?id=' + trackingId + '"></script>')
     window.dataLayer = window.dataLayer || []
@@ -1597,7 +1615,6 @@ class Main {
     this.hideNewGameMenu()
 
     document.querySelector(".middle_container").style.display = 'block'
-    document.querySelector("#desktop_transition_section").style.display = 'block'
     if (this.gameExplorer && this.gameExplorer.isAttachedToBody) {
       this.gameExplorer.attachToMiddleContainer()
     }
@@ -1605,7 +1622,6 @@ class Main {
 
   hideHomeMenu() {
     document.querySelector(".middle_container").style.display = 'none'
-    document.querySelector("#desktop_transition_section").style.display = 'none'
   }
 
   lockJoin() {
@@ -1794,6 +1810,11 @@ class Main {
   sendToMatchmaker(json) {
     let matchmakerSocket = this.getMatchmakerSocket()
     if (matchmakerSocket.readyState !== WebSocket.OPEN) return
+
+    if (["Visit", "NewColony", "BootSector", "JoinMiniGame", "LoginStarted", "LoginCompleted", "SignInCancelled", "SignInFailed"].indexOf(json.event) !== -1) {
+      let anonId = this.getAnonId()
+      if (anonId) json.data = Object.assign({}, json.data, { anonId: anonId })
+    }
 
     matchmakerSocket.send(JSON.stringify(json))
   }
@@ -2036,6 +2057,11 @@ class Main {
 
   async onMatchmakerConnectSuccess() {
     this.isConnectedToMatchmaker = true
+
+    if (!this.visitSent) {
+      this.visitSent = true
+      this.sendToMatchmaker({ event: "Visit", data: {} })
+    }
 
     if (this.isReadyToPresence()) {
       let idToken = await this.getFirebaseIdToken()

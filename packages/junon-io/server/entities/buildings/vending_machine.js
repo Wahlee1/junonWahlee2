@@ -19,6 +19,19 @@ class VendingMachine extends BaseBuilding {
     super.remove()
   }
 
+  canBeSalvagedBy(player) {
+      const role = player.getRole()
+      if (
+          (role && role.isAllowedTo("DeconstructOwnedStructures")) ||
+          this.getPlacer() === player ||
+          player.isSectorOwner()
+      ) {
+          return super.canBeSalvagedBy(player)
+      }
+      player.showError("You dont have permission to deconstruct this", {isWarning: true})
+      return false
+  }
+
   withdraw(player) {
     let canWithdraw = player === this.getOwner()
     if (!canWithdraw) {
@@ -59,9 +72,9 @@ class VendingMachine extends BaseBuilding {
 
     let purchaseHistory = this.getPurchaseHistory(customer, itemSold.type)
     if (purchaseHistory) {
-      if (purchaseHistory.count >= 3) {
-        return { error: i18n.t(customer.locale,"BoughtTooMuch") }
-      }
+      // if (purchaseHistory.count >= 3) {
+      //   return { error: i18n.t(customer.locale,"BoughtTooMuch") }
+      // }
     }
 
     return {}
